@@ -88,9 +88,14 @@ public class MainActivity extends AppCompatActivity {
         fetchHitokotoIfNeeded();
         addSpace(homeView,18);
 
-        LinearLayout schedule=card();String date=new SimpleDateFormat("M月d日  EEEE",Locale.CHINA).format(new Date());
-        LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);TextView sd=title(date,20);sh.addView(sd,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
-        schedule.addView(t("今日课程",14,MUTED));String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);schedule.addView(t("登录教务系统后，这里将用于直接展示今天的课程、时间和教室。",14,MUTED));homeView.addView(schedule);addSpace(homeView,20);
+        LinearLayout schedule=card();schedule.setTag("schedule");
+        LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",20);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
+        HorizontalScrollView dayScroll=new HorizontalScrollView(this);dayScroll.setHorizontalScrollBarEnabled(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);dayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(48));dayLp.topMargin=dp(8);schedule.addView(dayScroll,dayLp);
+        String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
+        String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split("\\u001e",-1);if(a.length==7)scheduleDays=a;}
+        selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());scheduleValue=title(cachedDays.isEmpty()?cachedSchedule:scheduleDays[selectedScheduleIndex],17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);schedule.addView(t("左右滑动课表，或点击日期切换前后几天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
+        schedule.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();return true;}if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(45)&&Math.abs(dx)>Math.abs(dy)){selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));return true;}return true;}return true;}});
+        homeView.addView(schedule);addSpace(homeView,20);
 
         LinearLayout ah=new LinearLayout(this);ah.setGravity(Gravity.CENTER_VERTICAL);ah.addView(title("校园账户",22),new LinearLayout.LayoutParams(0,-2,1));TextView sync=t("点击卡片进入官方服务",13,MUTED);ah.addView(sync);homeView.addView(ah);addSpace(homeView,8);
 
@@ -117,6 +122,12 @@ public class MainActivity extends AppCompatActivity {
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
     }
 
+    private int dayOfWeekIndex(Calendar date){int d=date.get(Calendar.DAY_OF_WEEK);return d==Calendar.SUNDAY?6:d-2;}
+    private String relativeDayLabel(int offset){if(offset==0)return "今天";if(offset==1)return "明天";if(offset==2)return "后天";if(offset==-1)return "昨天";if(offset==-2)return "前天";return offset>0?offset+"天后":(-offset)+"天前";}
+    private Calendar startOfCurrentWeek(){Calendar c=Calendar.getInstance();c.set(Calendar.HOUR_OF_DAY,0);c.set(Calendar.MINUTE,0);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);c.add(Calendar.DAY_OF_MONTH,-dayOfWeekIndex(c));return c;}
+    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();Calendar monday=startOfCurrentWeek();for(int i=0;i<7;i++){Calendar d=(Calendar)monday.clone();d.add(Calendar.DAY_OF_MONTH,i);int offset=i-dayOfWeekIndex(Calendar.getInstance());String label=relativeDayLabel(offset);String date=new SimpleDateFormat("M/d",Locale.CHINA).format(d.getTime());Button b=new Button(this);b.setAllCaps(false);b.setText(label+"\\n"+date);b.setTextSize(11);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(bg(i==selectedScheduleIndex?BLUE:Color.rgb(18,39,66),12));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(66),dp(44));lp.rightMargin=dp(6);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}}
+    private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=startOfCurrentWeek();d.add(Calendar.DAY_OF_MONTH,selectedScheduleIndex);int offset=selectedScheduleIndex-dayOfWeekIndex(Calendar.getInstance());scheduleDateLabel.setText(relativeDayLabel(offset)+" · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=prefs.getString("schedule","尚未同步课表");scheduleValue.setText(value);}
+    private void selectScheduleDay(int index){if(index<0||index>6)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
     private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
         if(start.length()==0)return 0;
@@ -267,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
                 if(finished[0])return;
                 new android.os.Handler().postDelayed(()->{
                     if(finished[0])return;
-                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr');var day=(new Date()).getDay();if(day===0)day=7;var out=[];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');if(c.length<=day)continue;var slot=(c[0].innerText||'').trim();var val=(c[day].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();out.push((slot?slot+'  ':'')+val);}}return 'JWCAP|'+(out.length?out.join('\\n'):'EMPTY');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
+                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
@@ -282,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private boolean isRefreshPayloadValid(String raw,int type){
         String x=jsClean(raw).replaceAll("\\s+"," ").trim();
-        if(type==0){int p=x.indexOf("JWCAP|");return p>=0&&x.substring(p+6).trim().length()>0;}
+        if(type==0){int p=x.indexOf("JWCAP7|");if(p>=0)return x.substring(p+7).trim().length()>0;p=x.indexOf("JWCAP|");return p>=0&&x.substring(p+6).trim().length()>0;}
         if(type==1)return extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"}).length()>0;
         return extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"}).length()>0;
     }
@@ -329,7 +340,7 @@ public class MainActivity extends AppCompatActivity {
         boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
         if(!jw&&!bill&&!card)return;
         String js;
-        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr');var day=(new Date()).getDay();if(day===0)day=7;var out=[];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');if(c.length<=day)continue;var slot=(c[0].innerText||'').trim();var val=(c[day].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();out.push((slot?slot+'  ':'')+val);}}return 'JWCAP|'+(out.length?out.join('\\n'):'EMPTY');})()";
+        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
@@ -338,9 +349,9 @@ public class MainActivity extends AppCompatActivity {
     private void parseSync(String raw,boolean jw,boolean bill,boolean card){
         String cleaned=jsClean(raw);
         if(jw){
-            int p=cleaned.indexOf("JWCAP|"); String table=p>=0?cleaned.substring(p+6).trim():"";
-            table=table.replace("\\\\n","\n").replace("\\n","\n").replaceAll("[ \\t]+"," ").trim();
-            if(p>=0){if(table.isEmpty()||"EMPTY".equalsIgnoreCase(table)){table="今日无事";}else{String[] lines=table.split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}table=nice.toString();if(table.length()>320)table=table.substring(0,320)+"…";}todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}
+            int p7=cleaned.indexOf("JWCAP7|");
+            if(p7>=0){String payload=cleaned.substring(p7+7);String[] encoded=payload.split("\\|",-1);if(encoded.length>=7){String[] days=new String[7];for(int i=0;i<7;i++){try{days[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){days[i]="";}if(days[i].isEmpty())days[i]="今日无事";else{String[] lines=days[i].split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}days[i]=nice.toString();}}scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append('\u001e');packed.append(day);}prefs.edit().putString("scheduleDays",packed.toString()).apply();selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());todaySummary=days[selectedScheduleIndex];saveValue("schedule",todaySummary);if(scheduleValue!=null){renderScheduleDayStrip();updateScheduleDayDisplay();}}}
+            }else{int p=cleaned.indexOf("JWCAP|");String table=p>=0?cleaned.substring(p+6).trim():"";table=table.replace("\\\\n","\n").replace("\\n","\n").replaceAll("[ \\t]+"," ").trim();if(p>=0){if(table.isEmpty()||"EMPTY".equalsIgnoreCase(table))table="今日无事";else{String[] lines=table.split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}table=nice.toString();if(table.length()>320)table=table.substring(0,320)+"…";}todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}}
         }else if(bill){
             String x=cleaned.replaceAll("\\s+"," ").trim();
             String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
