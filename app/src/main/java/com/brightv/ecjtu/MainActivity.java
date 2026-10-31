@@ -90,11 +90,17 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout schedule=card();schedule.setTag("schedule");
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",20);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
-        HorizontalScrollView dayScroll=new HorizontalScrollView(this);dayScroll.setHorizontalScrollBarEnabled(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);dayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(48));dayLp.topMargin=dp(8);schedule.addView(dayScroll,dayLp);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
-        String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split("\\u001e",-1);if(a.length==7)scheduleDays=a;}
-        selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());scheduleValue=title(cachedDays.isEmpty()?cachedSchedule:scheduleDays[selectedScheduleIndex],17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);schedule.addView(t("左右滑动课表，或点击日期切换前后几天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
-        schedule.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();return true;}if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(45)&&Math.abs(dx)>Math.abs(dy)){selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));return true;}return true;}return true;}});
+        boolean showMultiDay=prefs.getBoolean("showMultiDaySchedule",true);
+        if(showMultiDay){
+            HorizontalScrollView dayScroll=new HorizontalScrollView(this);dayScroll.setHorizontalScrollBarEnabled(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);dayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(48));dayLp.topMargin=dp(8);schedule.addView(dayScroll,dayLp);
+            String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split("\\u001e",-1);if(a.length==7)scheduleDays=a;}
+            selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());scheduleValue=title(cachedDays.isEmpty()?cachedSchedule:scheduleDays[selectedScheduleIndex],17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);schedule.addView(t("左右滑动课表，或点击日期切换前后几天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
+            schedule.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();return true;}if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(45)&&Math.abs(dx)>Math.abs(dy)){selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));return true;}return true;}return true;}});
+        }else{
+            scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
+            scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);
+        }
         homeView.addView(schedule);addSpace(homeView,20);
 
         LinearLayout ah=new LinearLayout(this);ah.setGravity(Gravity.CENTER_VERTICAL);ah.addView(title("校园账户",22),new LinearLayout.LayoutParams(0,-2,1));TextView sync=t("点击卡片进入官方服务",13,MUTED);ah.addView(sync);homeView.addView(ah);addSpace(homeView,8);
@@ -178,6 +184,14 @@ public class MainActivity extends AppCompatActivity {
 
         ScrollView scroll=new ScrollView(this);LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(content);
         content.addView(title("设置",31));content.addView(t("管理 ECJTUEE 的本地数据与诊断",15,MUTED));addSpace(content,18);
+
+        LinearLayout multiDay=card();
+        LinearLayout multiDayRow=new LinearLayout(this);multiDayRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout multiDayText=new LinearLayout(this);multiDayText.setOrientation(LinearLayout.VERTICAL);multiDayText.addView(title("多日课表预览",18));multiDayText.addView(t("开启后可在首页切换查看前后日期；关闭后只显示今天的课程。",13,MUTED));
+        multiDayRow.addView(multiDayText,new LinearLayout.LayoutParams(0,-2,1));
+        Switch multiDaySwitch=new Switch(this);multiDaySwitch.setText("展示多日课表");multiDaySwitch.setTextColor(Color.WHITE);multiDaySwitch.setChecked(prefs.getBoolean("showMultiDaySchedule",true));
+        multiDaySwitch.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("showMultiDaySchedule",checked).apply();Toast.makeText(this,checked?"已开启多日课表":"已切换为仅显示今日课表",Toast.LENGTH_SHORT).show();});
+        multiDayRow.addView(multiDaySwitch);multiDay.addView(multiDayRow);content.addView(multiDay);addSpace(content,12);
 
         LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));content.addView(reset);addSpace(content,12);
         LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));content.addView(logs);addSpace(content,12);
