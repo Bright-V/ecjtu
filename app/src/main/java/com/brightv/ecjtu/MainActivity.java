@@ -1,0 +1,144 @@
+package cn.edu.ecjtu;
+
+import android.annotation.SuppressLint;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.net.http.SslError;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.webkit.*;
+import android.widget.*;
+import androidx.activity.OnBackPressedCallback;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class MainActivity extends AppCompatActivity {
+    private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private boolean billsysSyncMode=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
+    private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
+    private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
+
+    @Override public void onCreate(Bundle b){super.onCreate(b);CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);buildHome();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
+    private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+    private GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
+    private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
+    private TextView title(String s,float z){TextView v=t(s,z,Color.WHITE);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private void addSpace(LinearLayout p,int h){Space s=new Space(this);p.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
+
+    private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(16),dp(18),dp(16));c.setBackground(bg(CARD,18));return c;}
+    private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(bg(CARD,14));b.setOnClickListener(v->open(label,url));return b;}
+
+    private void buildHome(){
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
+        ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(24),dp(20),dp(24));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
+
+        Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
+        homeView.addView(title(greet+"，",31));homeView.addView(t("华东交通大学 · 今天也要顺利",15,MUTED));addSpace(homeView,18);
+
+        LinearLayout schedule=card();String date=new SimpleDateFormat("M月d日  EEEE",Locale.CHINA).format(new Date());
+        LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);TextView sd=title(date,20);sh.addView(sd,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
+        schedule.addView(t("今日课程",14,MUTED));scheduleValue=title(prefs.getString("schedule",todaySummary),21);schedule.addView(scheduleValue);schedule.addView(t("登录教务系统后，这里将用于直接展示今天的课程、时间和教室。",14,MUTED));homeView.addView(schedule);addSpace(homeView,20);
+
+        LinearLayout ah=new LinearLayout(this);ah.setGravity(Gravity.CENTER_VERTICAL);ah.addView(title("校园账户",22),new LinearLayout.LayoutParams(0,-2,1));TextView sync=t("点击卡片进入官方服务",13,MUTED);ah.addView(sync);homeView.addView(ah);addSpace(homeView,8);
+
+        LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout power=card(); power.setClickable(true); power.setFocusable(true); power.setOnClickListener(v->{billsysSyncMode=false;open("宿舍电费","https://billsys.ecjtu.edu.cn/student/#/");});
+        power.addView(t("⚡  宿舍剩余电费",15,Color.WHITE)); powerValue=title(prefs.getString("power","未同步"),24); powerValue.setPadding(dp(4),dp(12),dp(4),0); power.addView(powerValue);
+        Button powerSync=action("登录 / 刷新",BILLSYS_OAUTH); powerSync.setOnClickListener(v->{billsysSyncMode=true;open("宿舍剩余电费",BILLSYS_OAUTH);}); power.addView(powerSync,new LinearLayout.LayoutParams(-1,dp(46)));
+        LinearLayout money=accountCard("▣  校园卡余额",prefs.getString("card","未同步"),"消费 / 充值","https://ecard.ecjtu.edu.cn/"); cardValue=(TextView)money.getChildAt(1);
+        row.addView(power,new LinearLayout.LayoutParams(0,dp(150),1));Space gap=new Space(this);row.addView(gap,new LinearLayout.LayoutParams(dp(10),1));row.addView(money,new LinearLayout.LayoutParams(0,dp(150),1));homeView.addView(row);addSpace(homeView,10);
+        LinearLayout spend=accountCard("▥  本月支出",prefs.getString("spend","未同步"),"校园卡消费汇总","https://ecard.ecjtu.edu.cn/"); spendValue=(TextView)spend.getChildAt(1);homeView.addView(spend,new LinearLayout.LayoutParams(-1,dp(138)));addSpace(homeView,20);
+
+        homeView.addView(title("快捷功能",20));addSpace(homeView,8);
+        LinearLayout quick=new LinearLayout(this);quick.setOrientation(LinearLayout.HORIZONTAL);
+        quick.addView(action("校园码","https://xymjxt.ecjtu.edu.cn/"),new LinearLayout.LayoutParams(0,dp(58),1));
+        Space qg=new Space(this);quick.addView(qg,new LinearLayout.LayoutParams(dp(10),1));
+        quick.addView(action("智慧教务",JWXT_OAUTH),new LinearLayout.LayoutParams(0,dp(58),1));homeView.addView(quick);addSpace(homeView,10);
+        homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
+
+        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
+        Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("♙\n我的",false);
+        n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->open("统一身份认证",JWXT_OAUTH));
+        nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
+        root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
+    }
+
+    private void refreshAllHomeInBackground(){
+        if(backgroundRefreshing)return;
+        backgroundRefreshing=true;backgroundRefreshPending=3;
+        refreshHidden("https://jwxt.ecjtu.edu.cn/Schedule/Schedule_getUserSchedume.action?item=0205",0);
+        refreshHidden("https://billsys.ecjtu.edu.cn/student/#/",1);
+        refreshHidden("https://ecard.ecjtu.edu.cn/",2);
+    }
+    @SuppressLint("SetJavaScriptEnabled") private void refreshHidden(String url,int type){
+        WebView w=new WebView(getApplicationContext());WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(w,true);
+        w.setWebViewClient(new WebViewClient(){boolean done=false;@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){String h=r.getUrl().getHost();return h==null||!(allowed.contains(h)||h.endsWith(".ecjtu.edu.cn"));}@Override public void onPageFinished(WebView v,String u){if(done)return;new android.os.Handler().postDelayed(()->{if(done)return;done=true;String js=type==0?"(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";v.evaluateJavascript(js,x->{parseSync(x,type==0,type==1,type==2);v.stopLoading();v.destroy();finishBackgroundRefresh();});},type==1?1800:900);}});
+        w.loadUrl(url);new android.os.Handler().postDelayed(()->{try{w.stopLoading();w.destroy();}catch(Exception ignored){}finishBackgroundRefresh();},10000);
+    }
+    private void finishBackgroundRefresh(){if(backgroundRefreshPending>0)backgroundRefreshPending--;if(backgroundRefreshPending==0&&backgroundRefreshing){backgroundRefreshing=false;if(homeRefresh!=null)homeRefresh.setRefreshing(false);Toast.makeText(this,"首页已刷新",Toast.LENGTH_SHORT).show();}}
+
+    private LinearLayout accountCard(String label,String value,String hint,String url){LinearLayout c=card();c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);c.addView(t(hint,13,Color.rgb(85,157,255)));return c;}
+    private Button navButton(String s,boolean active){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(active?BLUE:MUTED);b.setBackgroundColor(Color.TRANSPARENT);return b;}
+
+    @SuppressLint("SetJavaScriptEnabled") private void ensureBrowser(){if(browserView!=null)return;browserView=new LinearLayout(this);browserView.setOrientation(LinearLayout.VERTICAL);browserView.setBackgroundColor(BG);
+        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(4),dp(4),dp(4),dp(4));bar.setBackgroundColor(Color.rgb(18,39,66));
+        Button back=navButton("‹",true),home=navButton("首页",true),refresh=navButton("刷新",false);browserTitle=title("",15);browserTitle.setGravity(Gravity.CENTER);
+        bar.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));bar.addView(home,new LinearLayout.LayoutParams(dp(72),dp(54)));bar.addView(browserTitle,new LinearLayout.LayoutParams(0,dp(54),1));bar.addView(refresh,new LinearLayout.LayoutParams(dp(72),dp(54)));
+        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);webView=new WebView(this);WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(webView,true);
+        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){h.cancel();}@Override public void onPageFinished(WebView v,String u){progress.setVisibility(View.GONE);CookieManager.getInstance().flush();captureSchedule(v,u);syncFromPage(v,u);if(billsysSyncMode&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){new android.os.Handler().postDelayed(()->syncBillsysAndReturn(v),1800);}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("billsys.ecjtu.edu.cn/student/")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
+        webView.setWebChromeClient(new WebChromeClient(){@Override public void onProgressChanged(WebView v,int p){progress.setVisibility(p<100?View.VISIBLE:View.GONE);progress.setProgress(p);}});
+        back.setOnClickListener(v->{if(webView.canGoBack())webView.goBack();else showHome();});home.setOnClickListener(v->showHome());refresh.setOnClickListener(v->webView.reload());
+        browserView.addView(bar);browserView.addView(progress,new LinearLayout.LayoutParams(-1,dp(3)));browserView.addView(webView,new LinearLayout.LayoutParams(-1,0,1));}
+    private void open(String title,String url){ensureBrowser();browserTitle.setText(title);setContentView(browserView);browserView.setVisibility(View.VISIBLE);progress.setVisibility(View.VISIBLE);returnAfterLogin=url.contains("mobile.ecjtu.edu.cn/oauth/authorize")&&!url.equals(BILLSYS_OAUTH);webView.loadUrl(url);}
+    private void showHome(){buildHome();}
+    private void captureSchedule(WebView v,String url){
+        if(url!=null&&url.contains("jwxt.ecjtu.edu.cn/index.action")){
+            v.evaluateJavascript("(function(){var a=document.querySelectorAll('a');for(var i=0;i<a.length;i++){var x=(a[i].innerText||'').trim();if(x.indexOf('课表')>=0){return x;}}var b=document.body?document.body.innerText:'';var m=b.match(/.{0,30}(今日|学生日历).{0,180}/);return m?m[0]:'';})()", value->{if(value!=null&&value.length()>4){String x=value.replace("\\\"","").replace("\\n"," · ");if(x.length()>2)todaySummary=x;}});
+        }
+        if(url==null||!url.contains("jwxt.ecjtu.edu.cn"))return;
+        if(url.contains("Schedule_getUserSchedume.action")){
+            v.evaluateJavascript("(function(){var e=document.getElementById('courseSche');return e?e.outerHTML:'';})()", value->{ if(value!=null&&value.length()>4) lastJwxtHtml=value; });
+        }
+    }
+    private void syncBillsysAndReturn(WebView v){
+        v.evaluateJavascript("(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()",raw->{
+            String x=jsClean(raw).replaceAll("\\s+"," ").trim();String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
+            if(val.length()>0){if(!val.startsWith("¥")&&!val.startsWith("￥"))val="¥"+val;saveValue("power",val);prefs.edit().putBoolean("billsysLogged",true).apply();Toast.makeText(this,"宿舍剩余电费已更新",Toast.LENGTH_SHORT).show();billsysSyncMode=false;showHome();}
+        });
+    }
+    private void syncFromPage(WebView v,String url){
+        if(url==null)return;
+        boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
+        if(!jw&&!bill&&!card)return;
+        String js;
+        if(jw) js="(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()";
+        else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
+        else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
+        v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
+    }
+    private String jsClean(String s){if(s==null)return "";if(s.length()>=2&&s.charAt(0)=='"'&&s.charAt(s.length()-1)=='"')s=s.substring(1,s.length()-1);return s.replace("\\n"," ").replace("\\\"","\"");}
+    private void parseSync(String raw,boolean jw,boolean bill,boolean card){
+        String x=jsClean(raw).replaceAll("\\s+"," ").trim();
+        if(jw){
+            int p=x.indexOf("JWCAP|"); String table=p>=0?x.substring(p+6):"";
+            if(table.length()>0){if(table.length()>160)table=table.substring(0,160)+"…";todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}
+        }else if(bill){
+            String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
+            if(val.length()>0){saveValue("power",val);if(powerValue!=null)powerValue.setText(val);prefs.edit().putBoolean("billsysLogged",true).apply();}
+        }else if(card){
+            String bal=extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"});
+            String spend=extractNumber(x,new String[]{"本月支出","消费金额"});
+            if(bal.length()>0){saveValue("card",bal);if(cardValue!=null)cardValue.setText(bal);prefs.edit().putBoolean("ecardLogged",true).apply();}
+            if(spend.length()>0){saveValue("spend",spend);if(spendValue!=null)spendValue.setText(spend);}
+        }
+    }
+    private String extractNumber(String s,String[] keys){for(String k:keys){int p=s.indexOf(k);if(p>=0){String tail=s.substring(p,Math.min(s.length(),p+80));java.util.regex.Matcher m=java.util.regex.Pattern.compile("[-+]?\\d+(?:\\.\\d+)?").matcher(tail);if(m.find())return m.group();}}return "";}
+    private void saveValue(String key,String value){if(value!=null&&!value.trim().isEmpty())prefs.edit().putString(key,value.trim()).apply();}
+    @Override protected void onDestroy(){if(webView!=null){webView.stopLoading();webView.destroy();}super.onDestroy();}
+}
