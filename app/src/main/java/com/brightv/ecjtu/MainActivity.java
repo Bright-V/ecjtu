@@ -92,7 +92,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void buildSettings(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applySystemInsets(root,dp(20),dp(18),dp(20),dp(24));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
+        ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars());v.setPadding(dp(20)+bars.left,dp(28)+bars.top,dp(20)+bars.right,dp(24)+bars.bottom);return insets;});
         LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);Button back=navButton("‹",true);back.setOnClickListener(v->showHome());head.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));head.addView(title("设置",27));root.addView(head);addSpace(root,18);
         LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));root.addView(reset);addSpace(root,12);
         LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));root.addView(logs);addSpace(root,12);
