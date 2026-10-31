@@ -115,6 +115,29 @@ public class MainActivity extends AppCompatActivity {
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
     }
 
+    private int getSchoolWeek(Calendar today){
+        String start=prefs.getString("semesterStart","");
+        if(start.length()==0)return 0;
+        try{
+            Calendar first=Calendar.getInstance();
+            first.setTime(new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(start));
+            first.set(Calendar.HOUR_OF_DAY,0);first.set(Calendar.MINUTE,0);first.set(Calendar.SECOND,0);first.set(Calendar.MILLISECOND,0);
+            Calendar cur=(Calendar)today.clone();
+            cur.set(Calendar.HOUR_OF_DAY,0);cur.set(Calendar.MINUTE,0);cur.set(Calendar.SECOND,0);cur.set(Calendar.MILLISECOND,0);
+            long days=(cur.getTimeInMillis()-first.getTimeInMillis())/86400000L;
+            return days<0?0:(int)(days/7)+1;
+        }catch(Exception e){return 0;}
+    }
+    private void chooseSemesterStart(){
+        final EditText input=new EditText(this);input.setHint("例如 2026-09-07");input.setSingleLine(true);input.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
+        String old=prefs.getString("semesterStart","");if(old.length()>0)input.setText(old);
+        int p=dp(20);FrameLayout box=new FrameLayout(this);box.setPadding(p,0,p,0);box.addView(input,new FrameLayout.LayoutParams(-1,-2));
+        new AlertDialog.Builder(this).setTitle("开学日期设定").setMessage("设置本学期第一周周一的日期，首页会自动计算当前周次。").setView(box).setNegativeButton("取消",null).setPositiveButton("保存",(d,w)->{
+            String value=input.getText().toString().trim();
+            try{new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(value);prefs.edit().putString("semesterStart",value).apply();Toast.makeText(this,"开学日期已保存",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,"日期格式应为 YYYY-MM-DD",Toast.LENGTH_SHORT).show();}
+        }).setNeutralButton("清除",(d,w)->{prefs.edit().remove("semesterStart").apply();Toast.makeText(this,"开学日期已清除",Toast.LENGTH_SHORT).show();}).show();
+    }
+
     private void fetchHitokotoIfNeeded(){
         String today=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());
         if(today.equals(prefs.getString("hitokoto_date",""))&&prefs.getString("hitokoto","").length()>0)return;
