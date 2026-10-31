@@ -19,7 +19,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -78,21 +78,57 @@ public class MainActivity extends AppCompatActivity {
         n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->open("统一身份认证",JWXT_OAUTH));
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
         root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
+        homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
     }
 
     private void refreshAllHomeInBackground(){
         if(backgroundRefreshing)return;
-        backgroundRefreshing=true;backgroundRefreshPending=3;
+        backgroundRefreshing=true;backgroundRefreshPending=3;backgroundRefreshFailures=0;
         refreshHidden("https://jwxt.ecjtu.edu.cn/Schedule/Schedule_getUserSchedume.action?item=0205",0);
         refreshHidden("https://billsys.ecjtu.edu.cn/student/#/",1);
         refreshHidden("https://ecard.ecjtu.edu.cn/",2);
     }
     @SuppressLint("SetJavaScriptEnabled") private void refreshHidden(String url,int type){
-        WebView w=new WebView(getApplicationContext());WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(w,true);
-        w.setWebViewClient(new WebViewClient(){boolean done=false;@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){String h=r.getUrl().getHost();return h==null||!(allowed.contains(h)||h.endsWith(".ecjtu.edu.cn"));}@Override public void onPageFinished(WebView v,String u){if(done)return;new android.os.Handler().postDelayed(()->{if(done)return;done=true;String js=type==0?"(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";v.evaluateJavascript(js,x->{parseSync(x,type==0,type==1,type==2);v.stopLoading();v.destroy();finishBackgroundRefresh();});},type==1?1800:900);}});
-        w.loadUrl(url);new android.os.Handler().postDelayed(()->{try{w.stopLoading();w.destroy();}catch(Exception ignored){}finishBackgroundRefresh();},10000);
+        WebView w=new WebView(this);WebSettings s=w.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(w,true);
+        final boolean[] finished={false};
+        Runnable timeout=()->{if(finished[0])return;finished[0]=true;try{w.stopLoading();w.destroy();}catch(Exception ignored){}finishBackgroundRefresh(false);};
+        w.setWebViewClient(new WebViewClient(){
+            @Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){String h=r.getUrl().getHost();return h==null||!(allowed.contains(h)||h.endsWith(".ecjtu.edu.cn"));}
+            @Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame()&&!finished[0]){finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}finishBackgroundRefresh(false);}}
+            @Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse e){if(r.isForMainFrame()&&e.getStatusCode()>=400&&!finished[0]){finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}finishBackgroundRefresh(false);}}
+            @Override public void onPageFinished(WebView v,String u){
+                if(finished[0])return;
+                new android.os.Handler().postDelayed(()->{
+                    if(finished[0])return;
+                    String js=type==0?"(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
+                    v.evaluateJavascript(js,x->{
+                        if(finished[0])return;
+                        boolean ok=isRefreshPayloadValid(x,type);
+                        if(ok)parseSync(x,type==0,type==1,type==2);
+                        finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}
+                        finishBackgroundRefresh(ok);
+                    });
+                },type==1?1800:900);
+            }
+        });
+        w.loadUrl(url);new android.os.Handler().postDelayed(timeout,10000);
     }
-    private void finishBackgroundRefresh(){if(backgroundRefreshPending>0)backgroundRefreshPending--;if(backgroundRefreshPending==0&&backgroundRefreshing){backgroundRefreshing=false;if(homeRefresh!=null)homeRefresh.setRefreshing(false);Toast.makeText(this,"首页已刷新",Toast.LENGTH_SHORT).show();}}
+    private boolean isRefreshPayloadValid(String raw,int type){
+        String x=jsClean(raw).replaceAll("\\s+"," ").trim();
+        if(type==0){int p=x.indexOf("JWCAP|");return p>=0&&x.substring(p+6).trim().length()>0;}
+        if(type==1)return extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"}).length()>0;
+        return extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"}).length()>0;
+    }
+    private void finishBackgroundRefresh(boolean success){
+        if(!backgroundRefreshing)return;
+        if(!success)backgroundRefreshFailures++;
+        if(backgroundRefreshPending>0)backgroundRefreshPending--;
+        if(backgroundRefreshPending==0){
+            backgroundRefreshing=false;
+            if(homeRefresh!=null)homeRefresh.setRefreshing(false);
+            if(backgroundRefreshFailures>0)Toast.makeText(this,"首页刷新失败：有 "+backgroundRefreshFailures+" 项未能更新，请检查网络或登录状态",Toast.LENGTH_LONG).show();
+        }
+    }
 
     private LinearLayout accountCard(String label,String value,String hint,String url){LinearLayout c=card();c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);c.addView(t(hint,13,Color.rgb(85,157,255)));return c;}
     private Button navButton(String s,boolean active){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(active?BLUE:MUTED);b.setBackgroundColor(Color.TRANSPARENT);return b;}
