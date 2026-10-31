@@ -81,7 +81,8 @@ public class MainActivity extends AppCompatActivity {
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
         homeView.addView(title(greet+"，",31));
         hitokotoValue=t(prefs.getString("hitokoto","正在获取一言…"),15,MUTED);hitokotoValue.setPadding(dp(4),dp(5),dp(4),0);homeView.addView(hitokotoValue);
-        hitokotoFrom=t(prefs.getString("hitokoto_from",""),12,MUTED);hitokotoFrom.setPadding(dp(4),dp(2),dp(4),dp(5));homeView.addView(hitokotoFrom);fetchHitokoto();
+        hitokotoFrom=t(prefs.getString("hitokoto_from",""),12,MUTED);hitokotoFrom.setPadding(dp(4),dp(2),dp(4),dp(5));homeView.addView(hitokotoFrom);
+        fetchHitokotoIfNeeded();
         addSpace(homeView,18);
 
         LinearLayout schedule=card();String date=new SimpleDateFormat("M月d日  EEEE",Locale.CHINA).format(new Date());
@@ -113,7 +114,12 @@ public class MainActivity extends AppCompatActivity {
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
     }
 
-    private void fetchHitokoto(){
+    private void fetchHitokotoIfNeeded(){
+        String today=new SimpleDateFormat("yyyy-MM-dd",Locale.US).format(new Date());
+        if(today.equals(prefs.getString("hitokoto_date",""))&&prefs.getString("hitokoto","").length()>0)return;
+        fetchHitokoto(today);
+    }
+    private void fetchHitokoto(String today){
         new Thread(()->{
             java.net.HttpURLConnection conn=null;
             try{
@@ -123,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
                 java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
                 org.json.JSONObject o=new org.json.JSONObject(raw.toString());String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
                 if(quote.isEmpty())return;String source="—— "+(who.isEmpty()?"":who+" · ")+(from.isEmpty()?"一言":from);
-                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).apply();
+                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();
                 runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null)hitokotoFrom.setText(source);});
             }catch(Exception ignored){}finally{if(conn!=null)conn.disconnect();}
         }).start();
