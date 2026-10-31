@@ -47,7 +47,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip; private String[] scheduleDays=new String[7]; private int selectedScheduleIndex=0; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -350,16 +350,42 @@ public class MainActivity extends AppCompatActivity {
         String cleaned=jsClean(raw);
         if(jw){
             int p7=cleaned.indexOf("JWCAP7|");
-            if(p7>=0){String payload=cleaned.substring(p7+7);String[] encoded=payload.split("\\|",-1);if(encoded.length>=7){String[] days=new String[7];for(int i=0;i<7;i++){try{days[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){days[i]="";}if(days[i].isEmpty())days[i]="今日无事";else{String[] lines=days[i].split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}days[i]=nice.toString();}}scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}prefs.edit().putString("scheduleDays",packed.toString()).apply();selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());todaySummary=days[selectedScheduleIndex];saveValue("schedule",todaySummary);if(scheduleValue!=null){renderScheduleDayStrip();updateScheduleDayDisplay();}}}
-            }else{int p=cleaned.indexOf("JWCAP|");String table=p>=0?cleaned.substring(p+6).trim():"";table=table.replace("\\\\n","\n").replace("\\n","\n").replaceAll("[ \\t]+"," ").trim();if(p>=0){if(table.isEmpty()||"EMPTY".equalsIgnoreCase(table))table="今日无事";else{String[] lines=table.split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}table=nice.toString();if(table.length()>320)table=table.substring(0,320)+"…";}todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}}
+            if(p7>=0){
+                String payload=cleaned.substring(p7+7);
+                String[] encoded=payload.split("\\|",-1);
+                if(encoded.length>=7){
+                    String[] days=new String[7];
+                    for(int i=0;i<7;i++){
+                        try{days[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){days[i]="";}
+                        if(days[i].isEmpty())days[i]="今日无事";
+                        else{
+                            String[] lines=days[i].split("\\n");StringBuilder nice=new StringBuilder();
+                            for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\\n");nice.append("• ").append(line);}
+                            days[i]=nice.toString();
+                        }
+                    }
+                    scheduleDays=days;
+                    StringBuilder packed=new StringBuilder();
+                    for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
+                    prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
+                    selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());
+                    todaySummary=days[selectedScheduleIndex];saveValue("schedule",todaySummary);
+                    if(scheduleValue!=null){renderScheduleDayStrip();updateScheduleDayDisplay();}
+                }
+            }else{
+                int p=cleaned.indexOf("JWCAP|");String table=p>=0?cleaned.substring(p+6).trim():"";
+                table=table.replace("\\\\n","\\n").replace("\\n","\\n").replaceAll("[ \\t]+"," ").trim();
+                if(p>=0){
+                    if(table.isEmpty()||"EMPTY".equalsIgnoreCase(table))table="今日无事";
+                    else{String[] lines=table.split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\\n");nice.append("• ").append(line);}table=nice.toString();if(table.length()>320)table=table.substring(0,320)+"…";}
+                    todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();
+                }
+            }
         }else if(bill){
-            String x=cleaned.replaceAll("\\s+"," ").trim();
-            String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
+            String x=cleaned.replaceAll("\\s+"," ").trim();String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
             if(val.length()>0){saveValue("power",val);if(powerValue!=null)powerValue.setText(val);prefs.edit().putBoolean("billsysLogged",true).apply();}
         }else if(card){
-            String x=cleaned.replaceAll("\\s+"," ").trim();
-            String bal=extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"});
-            String spend=extractNumber(x,new String[]{"本月支出","消费金额"});
+            String x=cleaned.replaceAll("\\s+"," ").trim();String bal=extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"});String spend=extractNumber(x,new String[]{"本月支出","消费金额"});
             if(bal.length()>0){saveValue("card",bal);if(cardValue!=null)cardValue.setText(bal);prefs.edit().putBoolean("ecardLogged",true).apply();}
             if(spend.length()>0){saveValue("spend",spend);if(spendValue!=null)spendValue.setText(spend);}
         }
