@@ -357,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
                     String[] days=new String[7];
                     for(int i=0;i<7;i++){
                         try{days[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){days[i]="";}
-                        if(days[i].isEmpty())days[i]="今日无事";
+                        if(days[i].isEmpty())days[i]=(i==dayOfWeekIndex(Calendar.getInstance())?"今日无事":"暂无课程");
                         else{
                             String[] lines=days[i].split("\\n");StringBuilder nice=new StringBuilder();
                             for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\\n");nice.append("• ").append(line);}
