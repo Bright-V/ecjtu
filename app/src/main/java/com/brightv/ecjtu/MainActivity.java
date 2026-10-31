@@ -10,6 +10,16 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.content.Intent;
 import android.provider.Settings;
+import android.content.ContentValues;
+import android.database.Cursor;
+import android.provider.MediaStore;
+import android.app.Activity;
+import java.io.OutputStream;
+import java.io.InputStream;
+import java.security.SecureRandom;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -37,7 +47,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -108,8 +118,8 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));content.addView(reset);addSpace(content,12);
         LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));content.addView(logs);addSpace(content,12);
-        LinearLayout backup=card();backup.setClickable(true);backup.setOnClickListener(v->backupLoginState());backup.addView(title("备份",18));backup.addView(t("将当前校园服务登录状态加密备份到本机，仅供本应用恢复使用。",13,MUTED));content.addView(backup);addSpace(content,12);
-        LinearLayout restore=card();restore.setClickable(true);restore.setOnClickListener(v->restoreLoginState());restore.addView(title("恢复",18));restore.addView(t("从本机加密备份恢复校园服务登录状态，无需保存账号密码。",13,MUTED));content.addView(restore);
+        LinearLayout backup=card();backup.setClickable(true);backup.setOnClickListener(v->backupLoginState());backup.addView(title("备份",18));backup.addView(t("设置备份密码后，将登录状态加密导出到 Downloads。备份文件可用于换手机或卸载重装后恢复。",13,MUTED));content.addView(backup);addSpace(content,12);
+        LinearLayout restore=card();restore.setClickable(true);restore.setOnClickListener(v->restoreLoginState());restore.addView(title("恢复",18));restore.addView(t("选择 .ecjtuee 备份文件并输入备份密码，恢复校园服务登录状态。",13,MUTED));content.addView(restore);
 
         LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
         Button n1=navButton("⌂\n首页",false),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",true);
@@ -118,37 +128,56 @@ public class MainActivity extends AppCompatActivity {
 
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
     }
-    private File sessionBackupFile(){return new File(getFilesDir(),"login_state.ecjtuee");}
-    private SecretKey backupKey() throws Exception{
-        KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
-        String alias="ECJTUEE_SESSION_BACKUP";
-        if(ks.containsAlias(alias))return ((KeyStore.SecretKeyEntry)ks.getEntry(alias,null)).getSecretKey();
-        KeyGenerator kg=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
-        kg.init(new KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());
-        return kg.generateKey();
+    private SecretKey passwordKey(char[] password,byte[] salt) throws Exception{
+        PBEKeySpec spec=new PBEKeySpec(password,salt,150000,256);
+        byte[] key=SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();
+        spec.clearPassword();return new SecretKeySpec(key,"AES");
+    }
+    private String collectLoginCookies(){
+        StringBuilder data=new StringBuilder();
+        for(String host:allowed){String c=CookieManager.getInstance().getCookie("https://"+host+"/");if(c!=null&&!c.trim().isEmpty())data.append(host).append("\t").append(c).append("\n");}
+        return data.toString();
     }
     private void backupLoginState(){
-        try{
-            StringBuilder data=new StringBuilder();
-            for(String host:allowed){String url="https://"+host+"/";String c=CookieManager.getInstance().getCookie(url);if(c!=null&&!c.trim().isEmpty())data.append(host).append("\t").append(c).append("\n");}
-            if(data.length()==0){Toast.makeText(this,"没有可备份的登录状态",Toast.LENGTH_SHORT).show();return;}
-            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,backupKey());
-            byte[] iv=cipher.getIV(),enc=cipher.doFinal(data.toString().getBytes(StandardCharsets.UTF_8));
-            try(FileOutputStream out=new FileOutputStream(sessionBackupFile())){out.write(iv.length);out.write(iv);out.write(enc);}
-            Toast.makeText(this,"登录状态已加密备份到本机",Toast.LENGTH_SHORT).show();
-        }catch(Exception e){Toast.makeText(this,"备份失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
+        final EditText pass=new EditText(this);pass.setHint("至少 8 位备份密码");pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        int p=dp(20);FrameLayout box=new FrameLayout(this);box.setPadding(p,0,p,0);box.addView(pass,new FrameLayout.LayoutParams(-1,-2));
+        new AlertDialog.Builder(this).setTitle("创建可迁移备份").setMessage("备份包含登录 Cookie，请设置一个只有你知道的密码。换手机或重装后需要此密码恢复。").setView(box).setNegativeButton("取消",null).setPositiveButton("导出",(d,w)->{
+            String password=pass.getText().toString();if(password.length()<8){Toast.makeText(this,"备份密码至少 8 位",Toast.LENGTH_LONG).show();return;}
+            try{
+                String data=collectLoginCookies();if(data.isEmpty()){Toast.makeText(this,"没有可备份的登录状态",Toast.LENGTH_SHORT).show();return;}
+                byte[] salt=new byte[16],iv=new byte[12];SecureRandom sr=new SecureRandom();sr.nextBytes(salt);sr.nextBytes(iv);
+                Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,passwordKey(password.toCharArray(),salt),new GCMParameterSpec(128,iv));
+                byte[] enc=cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
+                String name="ECJTUEE_login_"+new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date())+".ecjtuee";
+                ContentValues cv=new ContentValues();cv.put(MediaStore.Downloads.DISPLAY_NAME,name);cv.put(MediaStore.Downloads.MIME_TYPE,"application/octet-stream");cv.put(MediaStore.Downloads.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS);
+                Uri uri=getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,cv);if(uri==null)throw new IllegalStateException("create failed");
+                try(OutputStream out=getContentResolver().openOutputStream(uri)){out.write(new byte[]{'E','C','J','B',1});out.write(salt);out.write(iv);out.write(enc);}
+                Toast.makeText(this,"备份已保存到 Downloads/"+name,Toast.LENGTH_LONG).show();
+            }catch(Exception e){Toast.makeText(this,"备份失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
+        }).show();
     }
     private void restoreLoginState(){
-        File file=sessionBackupFile();if(!file.exists()){Toast.makeText(this,"没有找到登录状态备份",Toast.LENGTH_SHORT).show();return;}
-        try(FileInputStream in=new FileInputStream(file)){
-            int n=in.read();if(n<12||n>32)throw new IllegalStateException("invalid backup");
-            byte[] iv=new byte[n];if(in.read(iv)!=n)throw new IllegalStateException("invalid backup");
-            byte[] enc=new byte[(int)file.length()-1-n];int off=0,r;while(off<enc.length&&(r=in.read(enc,off,enc.length-off))>0)off+=r;
-            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,backupKey(),new GCMParameterSpec(128,iv));
-            String data=new String(cipher.doFinal(enc),StandardCharsets.UTF_8);
-            CookieManager cm=CookieManager.getInstance();for(String line:data.split("\n")){int p=line.indexOf('\t');if(p<=0)continue;String host=line.substring(0,p),cookies=line.substring(p+1);for(String c:cookies.split(";\\s*"))cm.setCookie("https://"+host+"/",c);}
-            cm.flush();prefs.edit().putBoolean("setupComplete",true).apply();Toast.makeText(this,"登录状态已恢复",Toast.LENGTH_SHORT).show();buildHome();
-        }catch(Exception e){Toast.makeText(this,"恢复失败，备份可能已失效",Toast.LENGTH_LONG).show();}
+        final EditText pass=new EditText(this);pass.setHint("备份密码");pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        int p=dp(20);FrameLayout box=new FrameLayout(this);box.setPadding(p,0,p,0);box.addView(pass,new FrameLayout.LayoutParams(-1,-2));
+        new AlertDialog.Builder(this).setTitle("恢复登录状态").setMessage("先输入创建备份时设置的密码，然后选择 .ecjtuee 备份文件。").setView(box).setNegativeButton("取消",null).setPositiveButton("选择备份文件",(d,w)->{
+            if(pass.getText().length()==0){Toast.makeText(this,"请输入备份密码",Toast.LENGTH_SHORT).show();return;}
+            pendingBackupPassword=pass.getText().toString();Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,REQ_RESTORE_SESSION);
+        }).show();
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=REQ_RESTORE_SESSION||resultCode!=Activity.RESULT_OK||data==null||data.getData()==null)return;
+        String password=pendingBackupPassword;pendingBackupPassword=null;if(password==null)return;
+        try(InputStream in=getContentResolver().openInputStream(data.getData())){
+            byte[] head=new byte[5];if(in.read(head)!=5||head[0]!='E'||head[1]!='C'||head[2]!='J'||head[3]!='B'||head[4]!=1)throw new IllegalStateException("format");
+            byte[] salt=new byte[16],iv=new byte[12];if(in.read(salt)!=16||in.read(iv)!=12)throw new IllegalStateException("format");
+            java.io.ByteArrayOutputStream buf=new java.io.ByteArrayOutputStream();byte[] tmp=new byte[4096];int n;while((n=in.read(tmp))>0)buf.write(tmp,0,n);
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,passwordKey(password.toCharArray(),salt),new GCMParameterSpec(128,iv));
+            String plain=new String(cipher.doFinal(buf.toByteArray()),StandardCharsets.UTF_8);
+            CookieManager cm=CookieManager.getInstance();for(String line:plain.split("\n")){int q=line.indexOf('\t');if(q<=0)continue;String host=line.substring(0,q);if(!allowed.contains(host))continue;String cookies=line.substring(q+1);for(String c:cookies.split(";\\s*"))cm.setCookie("https://"+host+"/",c);}
+            cm.flush();prefs.edit().putBoolean("setupComplete",true).apply();Toast.makeText(this,"登录状态已恢复，正在刷新",Toast.LENGTH_LONG).show();buildHome();
+        }catch(javax.crypto.AEADBadTagException e){Toast.makeText(this,"恢复失败：密码错误或备份文件已损坏",Toast.LENGTH_LONG).show();}
+        catch(Exception e){Toast.makeText(this,"恢复失败：备份文件无效",Toast.LENGTH_LONG).show();}
     }
 
     private void confirmReset(){
