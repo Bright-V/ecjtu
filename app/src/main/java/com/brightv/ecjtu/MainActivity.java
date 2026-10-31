@@ -7,6 +7,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
+import android.os.Environment;
+import android.content.Intent;
+import android.provider.Settings;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import android.view.Gravity;
 import android.view.View;
 import android.webkit.*;
@@ -30,9 +39,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
     private TextView title(String s,float z){TextView v=t(s,z,Color.WHITE);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private void addSpace(LinearLayout p,int h){Space s=new Space(this);p.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
+    private void applySystemInsets(View root,int left,int top,int right,int bottom){ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars());v.setPadding(left+bars.left,top+bars.top,right+bars.right,bottom+bars.bottom);return insets;});ViewCompat.requestApplyInsets(root);}
 
     private void buildSetup(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setPadding(dp(28),dp(54),dp(28),dp(30));root.setBackgroundColor(BG);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(BG);applySystemInsets(root,dp(28),dp(28),dp(28),dp(30));
         TextView mark=title("ECJTUEE",34);mark.setGravity(Gravity.CENTER);root.addView(mark,new LinearLayout.LayoutParams(-1,-2));
         TextView hello=title("欢迎使用",28);hello.setGravity(Gravity.CENTER);hello.setPadding(0,dp(36),0,dp(8));root.addView(hello);
         TextView intro=t("像设置一台新设备一样，只需完成一次校园账号登录。登录状态将由 Android WebView 保存在本机，ECJTUEE 不会保存你的账号密码，也不会上传登录信息。",15,MUTED);intro.setGravity(Gravity.CENTER);root.addView(intro,new LinearLayout.LayoutParams(-1,-2));
@@ -46,15 +56,15 @@ public class MainActivity extends AppCompatActivity {
     private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(bg(CARD,14));b.setOnClickListener(v->open(label,url));return b;}
 
     private void buildHome(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
-        ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(24),dp(20),dp(24));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applySystemInsets(root,0,dp(12),0,0);
+        ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
 
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
         homeView.addView(title(greet+"，",31));homeView.addView(t("华东交通大学 · 今天也要顺利",15,MUTED));addSpace(homeView,18);
 
         LinearLayout schedule=card();String date=new SimpleDateFormat("M月d日  EEEE",Locale.CHINA).format(new Date());
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);TextView sd=title(date,20);sh.addView(sd,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
-        schedule.addView(t("今日课程",14,MUTED));scheduleValue=title(prefs.getString("schedule",todaySummary),21);schedule.addView(scheduleValue);schedule.addView(t("登录教务系统后，这里将用于直接展示今天的课程、时间和教室。",14,MUTED));homeView.addView(schedule);addSpace(homeView,20);
+        schedule.addView(t("今日课程",14,MUTED));scheduleValue=title(prefs.getString("schedule",todaySummary),17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);schedule.addView(t("登录教务系统后，这里将用于直接展示今天的课程、时间和教室。",14,MUTED));homeView.addView(schedule);addSpace(homeView,20);
 
         LinearLayout ah=new LinearLayout(this);ah.setGravity(Gravity.CENTER_VERTICAL);ah.addView(title("校园账户",22),new LinearLayout.LayoutParams(0,-2,1));TextView sync=t("点击卡片进入官方服务",13,MUTED);ah.addView(sync);homeView.addView(ah);addSpace(homeView,8);
 
@@ -74,11 +84,35 @@ public class MainActivity extends AppCompatActivity {
         homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
 
         LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
-        Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("♙\n我的",false);
-        n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->open("统一身份认证",JWXT_OAUTH));
+        Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",false);
+        n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->buildSettings());
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
         root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
+    }
+
+    private void buildSettings(){
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applySystemInsets(root,dp(20),dp(18),dp(20),dp(24));
+        LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);Button back=navButton("‹",true);back.setOnClickListener(v->showHome());head.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));head.addView(title("设置",27));root.addView(head);addSpace(root,18);
+        LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));root.addView(reset);addSpace(root,12);
+        LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));root.addView(logs);addSpace(root,12);
+        LinearLayout privacy=card();privacy.addView(title("本地数据",18));privacy.addView(t("登录状态由 Android WebView Cookie 保存在本机；首页仅缓存课表摘要、电费和校园卡展示数据。",13,MUTED));root.addView(privacy);
+        setContentView(root);
+    }
+    private void confirmReset(){
+        new AlertDialog.Builder(this).setTitle("初始化 ECJTUEE").setMessage("将清除登录状态和本地缓存，并重新进入首次设置。确定继续吗？").setNegativeButton("取消",null).setPositiveButton("初始化",(d,w)->resetApp()).show();
+    }
+    private void resetApp(){
+        prefs.edit().clear().apply();CookieManager.getInstance().removeAllCookies(v->{CookieManager.getInstance().flush();try{WebStorage.getInstance().deleteAllData();}catch(Exception ignored){}browserView=null;webView=null;buildSetup();Toast.makeText(this,"应用已初始化",Toast.LENGTH_SHORT).show();});
+    }
+    private void exportLogs(){
+        try{
+            File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);if(!dir.exists())dir.mkdirs();
+            String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());File out=new File(dir,"ECJTUEE_"+stamp+".log");
+            String log="ECJTUEE diagnostic log\nGenerated: "+new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())+"\nAndroid: "+android.os.Build.VERSION.RELEASE+" (API "+android.os.Build.VERSION.SDK_INT+")\nDevice: "+android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL+"\nApp: 0.1.0\nSetup complete: "+prefs.getBoolean("setupComplete",false)+"\nJWXT session detected: "+prefs.getBoolean("jwxtLogged",false)+"\nBillsys session detected: "+prefs.getBoolean("billsysLogged",false)+"\nEcard session detected: "+prefs.getBoolean("ecardLogged",false)+"\nLast cached schedule present: "+prefs.contains("schedule")+"\nLast cached power present: "+prefs.contains("power")+"\nLast cached card present: "+prefs.contains("card")+"\nNote: credentials, cookies and tokens are intentionally excluded.\n";
+            try(FileOutputStream os=new FileOutputStream(out)){os.write(log.getBytes(StandardCharsets.UTF_8));}
+            Toast.makeText(this,"日志已保存到 Downloads/"+out.getName(),Toast.LENGTH_LONG).show();
+        }catch(Exception e){Toast.makeText(this,"日志保存失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
     }
 
     private void refreshAllHomeInBackground(){
@@ -100,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                 if(finished[0])return;
                 new android.os.Handler().postDelayed(()->{
                     if(finished[0])return;
-                    String js=type==0?"(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
+                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr');var day=(new Date()).getDay();if(day===0)day=7;var out=[];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');if(c.length<=day)continue;var slot=(c[0].innerText||'').trim();var val=(c[day].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();out.push((slot?slot+'  ':'')+val);}}return 'JWCAP|'+out.join('\\n');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
@@ -164,21 +198,24 @@ public class MainActivity extends AppCompatActivity {
         boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
         if(!jw&&!bill&&!card)return;
         String js;
-        if(jw) js="(function(){var t=document.getElementById('courseSche');return 'JWCAP|'+(t?t.innerText:'');})()";
+        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr');var day=(new Date()).getDay();if(day===0)day=7;var out=[];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');if(c.length<=day)continue;var slot=(c[0].innerText||'').trim();var val=(c[day].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();out.push((slot?slot+'  ':'')+val);}}return 'JWCAP|'+out.join('\\n');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
     }
     private String jsClean(String s){if(s==null)return "";if(s.length()>=2&&s.charAt(0)=='"'&&s.charAt(s.length()-1)=='"')s=s.substring(1,s.length()-1);return s.replace("\\n"," ").replace("\\\"","\"");}
     private void parseSync(String raw,boolean jw,boolean bill,boolean card){
-        String x=jsClean(raw).replaceAll("\\s+"," ").trim();
+        String cleaned=jsClean(raw);
         if(jw){
-            int p=x.indexOf("JWCAP|"); String table=p>=0?x.substring(p+6):"";
-            if(table.length()>0){if(table.length()>160)table=table.substring(0,160)+"…";todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}
+            int p=cleaned.indexOf("JWCAP|"); String table=p>=0?cleaned.substring(p+6).trim():"";
+            table=table.replace("\\\\n","\n").replace("\\n","\n").replaceAll("[ \\t]+"," ").trim();
+            if(table.length()>0){String[] lines=table.split("\\n");StringBuilder nice=new StringBuilder();for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}table=nice.toString();if(table.length()>320)table=table.substring(0,320)+"…";todaySummary=table;saveValue("schedule",table);if(scheduleValue!=null)scheduleValue.setText(table);prefs.edit().putBoolean("jwxtLogged",true).apply();}
         }else if(bill){
+            String x=cleaned.replaceAll("\\s+"," ").trim();
             String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
             if(val.length()>0){saveValue("power",val);if(powerValue!=null)powerValue.setText(val);prefs.edit().putBoolean("billsysLogged",true).apply();}
         }else if(card){
+            String x=cleaned.replaceAll("\\s+"," ").trim();
             String bal=extractNumber(x,new String[]{"账户余额","卡余额","可用余额","余额"});
             String spend=extractNumber(x,new String[]{"本月支出","消费金额"});
             if(bal.length()>0){saveValue("card",bal);if(cardValue!=null)cardValue.setText(bal);prefs.edit().putBoolean("ecardLogged",true).apply();}
