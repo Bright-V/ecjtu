@@ -16,6 +16,14 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowCompat;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import java.nio.charset.StandardCharsets;
 import android.view.Gravity;
 import android.view.View;
@@ -100,7 +108,8 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));content.addView(reset);addSpace(content,12);
         LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));content.addView(logs);addSpace(content,12);
-        LinearLayout privacy=card();privacy.addView(title("本地数据",18));privacy.addView(t("登录状态由 Android WebView Cookie 保存在本机；首页仅缓存课表摘要、电费和校园卡展示数据。",13,MUTED));content.addView(privacy);
+        LinearLayout backup=card();backup.setClickable(true);backup.setOnClickListener(v->backupLoginState());backup.addView(title("备份",18));backup.addView(t("将当前校园服务登录状态加密备份到本机，仅供本应用恢复使用。",13,MUTED));content.addView(backup);addSpace(content,12);
+        LinearLayout restore=card();restore.setClickable(true);restore.setOnClickListener(v->restoreLoginState());restore.addView(title("恢复",18));restore.addView(t("从本机加密备份恢复校园服务登录状态，无需保存账号密码。",13,MUTED));content.addView(restore);
 
         LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
         Button n1=navButton("⌂\n首页",false),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",true);
@@ -109,6 +118,39 @@ public class MainActivity extends AppCompatActivity {
 
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
     }
+    private File sessionBackupFile(){return new File(getFilesDir(),"login_state.ecjtuee");}
+    private SecretKey backupKey() throws Exception{
+        KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
+        String alias="ECJTUEE_SESSION_BACKUP";
+        if(ks.containsAlias(alias))return ((KeyStore.SecretKeyEntry)ks.getEntry(alias,null)).getSecretKey();
+        KeyGenerator kg=KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
+        kg.init(new KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build());
+        return kg.generateKey();
+    }
+    private void backupLoginState(){
+        try{
+            StringBuilder data=new StringBuilder();
+            for(String host:allowed){String url="https://"+host+"/";String c=CookieManager.getInstance().getCookie(url);if(c!=null&&!c.trim().isEmpty())data.append(host).append("\t").append(c).append("\n");}
+            if(data.length()==0){Toast.makeText(this,"没有可备份的登录状态",Toast.LENGTH_SHORT).show();return;}
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.ENCRYPT_MODE,backupKey());
+            byte[] iv=cipher.getIV(),enc=cipher.doFinal(data.toString().getBytes(StandardCharsets.UTF_8));
+            try(FileOutputStream out=new FileOutputStream(sessionBackupFile())){out.write(iv.length);out.write(iv);out.write(enc);}
+            Toast.makeText(this,"登录状态已加密备份到本机",Toast.LENGTH_SHORT).show();
+        }catch(Exception e){Toast.makeText(this,"备份失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
+    }
+    private void restoreLoginState(){
+        File file=sessionBackupFile();if(!file.exists()){Toast.makeText(this,"没有找到登录状态备份",Toast.LENGTH_SHORT).show();return;}
+        try(FileInputStream in=new FileInputStream(file)){
+            int n=in.read();if(n<12||n>32)throw new IllegalStateException("invalid backup");
+            byte[] iv=new byte[n];if(in.read(iv)!=n)throw new IllegalStateException("invalid backup");
+            byte[] enc=new byte[(int)file.length()-1-n];int off=0,r;while(off<enc.length&&(r=in.read(enc,off,enc.length-off))>0)off+=r;
+            Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");cipher.init(Cipher.DECRYPT_MODE,backupKey(),new GCMParameterSpec(128,iv));
+            String data=new String(cipher.doFinal(enc),StandardCharsets.UTF_8);
+            CookieManager cm=CookieManager.getInstance();for(String line:data.split("\n")){int p=line.indexOf('\t');if(p<=0)continue;String host=line.substring(0,p),cookies=line.substring(p+1);for(String c:cookies.split(";\\s*"))cm.setCookie("https://"+host+"/",c);}
+            cm.flush();prefs.edit().putBoolean("setupComplete",true).apply();Toast.makeText(this,"登录状态已恢复",Toast.LENGTH_SHORT).show();buildHome();
+        }catch(Exception e){Toast.makeText(this,"恢复失败，备份可能已失效",Toast.LENGTH_LONG).show();}
+    }
+
     private void confirmReset(){
         new AlertDialog.Builder(this).setTitle("初始化 ECJTUEE").setMessage("将清除登录状态和本地缓存，并重新进入首次设置。确定继续吗？").setNegativeButton("取消",null).setPositiveButton("初始化",(d,w)->resetApp()).show();
     }
