@@ -156,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
     private void syncBillsysAndReturn(WebView v){
         v.evaluateJavascript("(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()",raw->{
             String x=jsClean(raw).replaceAll("\\s+"," ").trim();String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
-            if(val.length()>0){if(!val.startsWith("¥")&&!val.startsWith("￥"))val="¥"+val;saveValue("power",val);prefs.edit().putBoolean("billsysLogged",true).apply();Toast.makeText(this,"宿舍剩余电费已更新",Toast.LENGTH_SHORT).show();billsysSyncMode=false;showHome();}
+            if(val.length()>0){if(!val.startsWith("¥")&&!val.startsWith("￥"))val="¥"+val;saveValue("power",val);prefs.edit().putBoolean("billsysLogged",true).apply();Toast.makeText(this,"宿舍剩余电费已更新",Toast.LENGTH_SHORT).show();showHome();}
         });
     }
     private void syncFromPage(WebView v,String url){
