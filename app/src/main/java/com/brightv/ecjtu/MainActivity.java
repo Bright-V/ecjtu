@@ -47,7 +47,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -79,7 +79,10 @@ public class MainActivity extends AppCompatActivity {
         ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
 
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
-        homeView.addView(title(greet+"，",31));homeView.addView(t("华东交通大学 · 今天也要顺利",15,MUTED));addSpace(homeView,18);
+        homeView.addView(title(greet+"，",31));
+        hitokotoValue=t(prefs.getString("hitokoto","正在获取一言…"),15,MUTED);hitokotoValue.setPadding(dp(4),dp(5),dp(4),0);homeView.addView(hitokotoValue);
+        hitokotoFrom=t(prefs.getString("hitokoto_from",""),12,MUTED);hitokotoFrom.setPadding(dp(4),dp(2),dp(4),dp(5));homeView.addView(hitokotoFrom);fetchHitokoto();
+        addSpace(homeView,18);
 
         LinearLayout schedule=card();String date=new SimpleDateFormat("M月d日  EEEE",Locale.CHINA).format(new Date());
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);TextView sd=title(date,20);sh.addView(sd,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);sh.addView(all,new LinearLayout.LayoutParams(dp(105),dp(46)));schedule.addView(sh);
@@ -108,6 +111,22 @@ public class MainActivity extends AppCompatActivity {
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
         root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
+    }
+
+    private void fetchHitokoto(){
+        new Thread(()->{
+            java.net.HttpURLConnection conn=null;
+            try{
+                java.net.URL url=new java.net.URL("https://v1.hitokoto.cn/?encode=json");
+                conn=(java.net.HttpURLConnection)url.openConnection();conn.setConnectTimeout(5000);conn.setReadTimeout(5000);conn.setRequestMethod("GET");conn.setRequestProperty("Accept","application/json");
+                if(conn.getResponseCode()!=200)throw new java.io.IOException("HTTP "+conn.getResponseCode());
+                java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
+                org.json.JSONObject o=new org.json.JSONObject(raw.toString());String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
+                if(quote.isEmpty())return;String source="—— "+(who.isEmpty()?"":who+" · ")+(from.isEmpty()?"一言":from);
+                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).apply();
+                runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null)hitokotoFrom.setText(source);});
+            }catch(Exception ignored){}finally{if(conn!=null)conn.disconnect();}
+        }).start();
     }
 
     private void buildSettings(){
