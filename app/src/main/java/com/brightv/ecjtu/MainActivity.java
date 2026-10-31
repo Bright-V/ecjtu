@@ -79,10 +79,12 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applyPagePadding(root,0,dp(30),0,0);
         ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
 
-        Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
-        homeView.addView(title(greet+"，",31));
+        Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";int week=getSchoolWeek(cal);String weekText=week>0?"第"+week+"周":"未设置周次";
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.BOTTOM);
+        TextView greetView=title(greet+"，",31);hero.addView(greetView,new LinearLayout.LayoutParams(0,-2,1));
+        TextView weekView=t(weekText,15,MUTED);weekView.setGravity(Gravity.RIGHT|Gravity.BOTTOM);weekView.setPadding(dp(4),dp(5),0,dp(8));hero.addView(weekView,new LinearLayout.LayoutParams(-2,-2));homeView.addView(hero);
         hitokotoValue=t(prefs.getString("hitokoto","正在获取一言…"),15,MUTED);hitokotoValue.setPadding(dp(4),dp(5),dp(4),0);homeView.addView(hitokotoValue);
-        hitokotoFrom=t(prefs.getString("hitokoto_from",""),12,MUTED);hitokotoFrom.setPadding(dp(4),dp(2),dp(4),dp(5));homeView.addView(hitokotoFrom);
+        String cachedFrom=prefs.getString("hitokoto_from","");boolean hasFrom=cachedFrom!=null&&!cachedFrom.trim().isEmpty()&&!cachedFrom.trim().equalsIgnoreCase("null")&&!cachedFrom.trim().equals("—— null");hitokotoFrom=t(hasFrom?cachedFrom:"",12,MUTED);hitokotoFrom.setPadding(dp(4),dp(2),dp(4),dp(5));hitokotoFrom.setVisibility(hasFrom?View.VISIBLE:View.GONE);homeView.addView(hitokotoFrom);
         fetchHitokotoIfNeeded();
         addSpace(homeView,18);
 
@@ -152,9 +154,10 @@ public class MainActivity extends AppCompatActivity {
                 if(conn.getResponseCode()!=200)throw new java.io.IOException("HTTP "+conn.getResponseCode());
                 java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
                 org.json.JSONObject o=new org.json.JSONObject(raw.toString());String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
-                if(quote.isEmpty())return;String source="—— "+(who.isEmpty()?"":who+" · ")+(from.isEmpty()?"一言":from);
+                if("null".equalsIgnoreCase(from))from="";if("null".equalsIgnoreCase(who))who="";if(quote.isEmpty())return;
+                String source="";if(!who.isEmpty()&&!from.isEmpty())source="—— "+who+" · "+from;else if(!who.isEmpty())source="—— "+who;else if(!from.isEmpty())source="—— "+from;
                 prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();
-                runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null)hitokotoFrom.setText(source);});
+                final String finalSource=source;runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null){hitokotoFrom.setText(finalSource);hitokotoFrom.setVisibility(finalSource.isEmpty()?View.GONE:View.VISIBLE);}});
             }catch(Exception ignored){}finally{if(conn!=null)conn.disconnect();}
         }).start();
     }
