@@ -93,13 +93,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void buildSettings(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
-        applyPagePadding(root,dp(20),dp(30),dp(20),dp(24));
-        LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);Button back=navButton("‹",true);back.setOnClickListener(v->showHome());head.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));head.addView(title("设置",27));root.addView(head);addSpace(root,18);
-        LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));root.addView(reset);addSpace(root,12);
-        LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));root.addView(logs);addSpace(root,12);
-        LinearLayout privacy=card();privacy.addView(title("本地数据",18));privacy.addView(t("登录状态由 Android WebView Cookie 保存在本机；首页仅缓存课表摘要、电费和校园卡展示数据。",13,MUTED));root.addView(privacy);
-        setContentView(root);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applyPagePadding(root,0,dp(30),0,0);
+
+        ScrollView scroll=new ScrollView(this);LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(20),0,dp(20),dp(32));scroll.addView(content);
+        content.addView(title("设置",31));content.addView(t("管理 ECJTUEE 的本地数据与诊断",15,MUTED));addSpace(content,18);
+
+        LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));content.addView(reset);addSpace(content,12);
+        LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));content.addView(logs);addSpace(content,12);
+        LinearLayout privacy=card();privacy.addView(title("本地数据",18));privacy.addView(t("登录状态由 Android WebView Cookie 保存在本机；首页仅缓存课表摘要、电费和校园卡展示数据。",13,MUTED));content.addView(privacy);
+
+        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
+        Button n1=navButton("⌂\n首页",false),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",true);
+        n1.setOnClickListener(v->showHome());n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->{});
+        nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
+
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
     }
     private void confirmReset(){
         new AlertDialog.Builder(this).setTitle("初始化 ECJTUEE").setMessage("将清除登录状态和本地缓存，并重新进入首次设置。确定继续吗？").setNegativeButton("取消",null).setPositiveButton("初始化",(d,w)->resetApp()).show();
