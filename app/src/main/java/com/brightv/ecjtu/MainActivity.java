@@ -369,7 +369,7 @@ public class MainActivity extends AppCompatActivity {
                     for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
                     prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
                     selectedScheduleIndex=dayOfWeekIndex(Calendar.getInstance());
-                    todaySummary=days[selectedScheduleIndex];saveValue("schedule",todaySummary);
+                    todaySummary=days[selectedScheduleIndex];saveValue("schedule",todaySummary);prefs.edit().putBoolean("jwxtLogged",true).apply();
                     if(scheduleValue!=null){renderScheduleDayStrip();updateScheduleDayDisplay();}
                 }
             }else{
