@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}
 
     private void buildSetup(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(BG);applySystemInsets(root,dp(28),dp(28),dp(28),dp(30));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(BG);applyPagePadding(root,dp(28),dp(28),dp(28),dp(30));
         TextView mark=title("ECJTUEE",34);mark.setGravity(Gravity.CENTER);root.addView(mark,new LinearLayout.LayoutParams(-1,-2));
         TextView hello=title("欢迎使用",28);hello.setGravity(Gravity.CENTER);hello.setPadding(0,dp(36),0,dp(8));root.addView(hello);
         TextView intro=t("像设置一台新设备一样，只需完成一次校园账号登录。登录状态将由 Android WebView 保存在本机，ECJTUEE 不会保存你的账号密码，也不会上传登录信息。",15,MUTED);intro.setGravity(Gravity.CENTER);root.addView(intro,new LinearLayout.LayoutParams(-1,-2));
@@ -57,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
     private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(bg(CARD,14));b.setOnClickListener(v->open(label,url));return b;}
 
     private void buildHome(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applySystemInsets(root,0,dp(12),0,0);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applyPagePadding(root,0,dp(12),0,0);
         ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
 
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";
