@@ -47,7 +47,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -361,10 +361,32 @@ public class MainActivity extends AppCompatActivity {
     private void exportLogs(){
         try{
             File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);if(!dir.exists())dir.mkdirs();
-            String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());File out=new File(dir,"ECJTUEE_"+stamp+".log");
-            String log="ECJTUEE diagnostic log\nGenerated: "+new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())+"\nAndroid: "+android.os.Build.VERSION.RELEASE+" (API "+android.os.Build.VERSION.SDK_INT+")\nDevice: "+android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL+"\nApp: 0.1.0\nSetup complete: "+prefs.getBoolean("setupComplete",false)+"\nJWXT session detected: "+prefs.getBoolean("jwxtLogged",false)+"\nBillsys session detected: "+prefs.getBoolean("billsysLogged",false)+"\nEcard session detected: "+prefs.getBoolean("ecardLogged",false)+"\nLast cached schedule present: "+prefs.contains("schedule")+"\nLast cached power present: "+prefs.contains("power")+"\nLast cached card present: "+prefs.contains("card")+"\nNote: credentials, cookies and tokens are intentionally excluded.\n";
-            try(FileOutputStream os=new FileOutputStream(out)){os.write(log.getBytes(StandardCharsets.UTF_8));}
-            Toast.makeText(this,"日志已保存到 Downloads/"+out.getName(),Toast.LENGTH_LONG).show();
+            String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());File out=new File(dir,"ECJTUEE_Diagnostic_"+stamp+".txt");
+            StringBuilder log=new StringBuilder();
+            log.append("ECJTUEE 教务课表诊断日志\n");
+            log.append("生成时间: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).append("\n");
+            log.append("Android: ").append(android.os.Build.VERSION.RELEASE).append(" (API ").append(android.os.Build.VERSION.SDK_INT).append(")\n");
+            log.append("设备: ").append(android.os.Build.MANUFACTURER).append(" ").append(android.os.Build.MODEL).append("\n");
+            log.append("应用版本: 0.1.0\n");
+            log.append("开学日期: ").append(prefs.getString("semesterStart","未设置")).append("\n");
+            log.append("当前周次: ").append(getSchoolWeek(Calendar.getInstance())).append("\n");
+            log.append("教务登录状态标记: ").append(prefs.getBoolean("jwxtLogged",false)).append("\n");
+            log.append("最近抓取状态: ").append(lastJwxtCaptureStatus).append("\n");
+            log.append("最近抓取时间: ").append(lastJwxtCaptureAt.isEmpty()?"无":lastJwxtCaptureAt).append("\n");
+            log.append("最近一次缓存课表存在: ").append(prefs.contains("schedule")).append("\n");
+            log.append("\n========== A. 教务原始抓取数据（按星期/节次分组） ==========\n");
+            log.append(lastJwxtRawData.isEmpty()?"暂无原始课表数据。请登录智慧教务并刷新首页后重新导出。":lastJwxtRawData).append("\n");
+            log.append("\n========== B. 应用解析后的课表 ==========\n");
+            log.append(lastJwxtParsedData.isEmpty()?"暂无解析结果。":lastJwxtParsedData).append("\n");
+            log.append("\n========== C. 当前缓存的31天课表 ==========\n");
+            String packed=prefs.getString("scheduleDays","");
+            if(packed.isEmpty())log.append("暂无缓存。\n");
+            else{String[] cached=packed.split(String.valueOf((char)30),-1);for(int i=0;i<cached.length;i++){Calendar d=(Calendar)Calendar.getInstance().clone();d.add(Calendar.DAY_OF_MONTH,i-15);log.append(new SimpleDateFormat("yyyy-MM-dd EEE",Locale.CHINA).format(d.getTime())).append(": ").append(cached[i].replace("\n"," | ")).append("\n");}}
+            log.append("\n========== D. 诊断说明 ==========\n");
+            log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存。\n");
+            log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整 URL。原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查并确认愿意提供。\n");
+            try(FileOutputStream os=new FileOutputStream(out)){os.write(log.toString().getBytes(StandardCharsets.UTF_8));}
+            Toast.makeText(this,"诊断日志已保存到 Downloads/"+out.getName(),Toast.LENGTH_LONG).show();
         }catch(Exception e){Toast.makeText(this,"日志保存失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
     }
 
@@ -463,6 +485,14 @@ public class MainActivity extends AppCompatActivity {
                 String payload=cleaned.substring(p7+7);String[] encoded=payload.split("\\|",-1);
                 if(encoded.length>=7){
                     String[] weekdayCourses=new String[7];
+                    StringBuilder rawDiagnostic=new StringBuilder();
+                    String[] weekdayNames={"星期一","星期二","星期三","星期四","星期五","星期六","星期日"};
+                    for(int i=0;i<7;i++){
+                        try{String decoded=java.net.URLDecoder.decode(encoded[i],"UTF-8").replace("\\r","").replace("\\\\n","\\n").replace("\\n","\\n");rawDiagnostic.append("【").append(weekdayNames[i]).append("】\\n").append(decoded.isEmpty()?"（空）":decoded).append("\\n");}catch(Exception ex){rawDiagnostic.append("【").append(weekdayNames[i]).append("】解码失败: ").append(ex.getClass().getSimpleName()).append("\\n");}
+                    }
+                    lastJwxtRawData=rawDiagnostic.toString();
+                    lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());
+                    lastJwxtCaptureStatus="成功：读取到 JWCAP7，星期列数="+encoded.length;
                     for(int i=0;i<7;i++){
                         try{weekdayCourses[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){weekdayCourses[i]="";}
                         if(!weekdayCourses[i].isEmpty()){
@@ -480,6 +510,9 @@ public class MainActivity extends AppCompatActivity {
                         if(!source.isEmpty()){for(String line:source.split("\\n")){line=line.trim();if(line.isEmpty()||!courseOccursInWeek(line,weekNo))continue;if(visible.length()>0)visible.append("\n");visible.append(line);}}
                         days[i]=visible.length()==0?(i==15?"今日无事":"暂无课程"):visible.toString();
                     }
+                    StringBuilder parsedDiagnostic=new StringBuilder();
+                    for(int i=0;i<7;i++){parsedDiagnostic.append("【").append(weekdayNames[i]).append("】\\n");for(String item:splitCourseEntries(weekdayCourses[i]))parsedDiagnostic.append("  ").append(item).append("\\n");}
+                    lastJwxtParsedData=parsedDiagnostic.toString();
                     scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
                     prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
                     selectedScheduleIndex=15;todaySummary=days[15];saveValue("schedule",todaySummary);
