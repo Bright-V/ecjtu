@@ -589,7 +589,11 @@ public class MainActivity extends AppCompatActivity {
                     float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
                     int slop=android.view.ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
                     if(scheduleGestureAxis[0]==0&&(Math.abs(dx)>slop||Math.abs(dy)>slop))scheduleGestureAxis[0]=Math.abs(dx)>Math.abs(dy)?2:1;
-                    if(scheduleGestureAxis[0]==2){getParent().requestDisallowInterceptTouchEvent(true);return true;}
+                    if(scheduleGestureAxis[0]==2){
+                        // 横向手势不再切换日期；交给日期条自己的 HorizontalScrollView 处理滚动。
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                        return false;
+                    }
                     if(scheduleGestureAxis[0]==1){
                         boolean innerCanScroll=dy<0?canScrollVertically(1):canScrollVertically(-1);
                         getParent().requestDisallowInterceptTouchEvent(innerCanScroll);
@@ -601,8 +605,6 @@ public class MainActivity extends AppCompatActivity {
             @Override public boolean onTouchEvent(android.view.MotionEvent event){
                 int action=event.getActionMasked();
                 if(action==android.view.MotionEvent.ACTION_UP){
-                    float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
-                    if(scheduleGestureAxis[0]==2&&Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));
                     getParent().requestDisallowInterceptTouchEvent(false);scheduleGestureAxis[0]=0;
                 }else if(action==android.view.MotionEvent.ACTION_CANCEL){getParent().requestDisallowInterceptTouchEvent(false);scheduleGestureAxis[0]=0;}
                 return super.onTouchEvent(event);
@@ -616,7 +618,7 @@ public class MainActivity extends AppCompatActivity {
         if(showMultiDay){
             scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);scheduleContent.addView(scheduleDayScroll,dayLp);
             String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
-            scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
+            scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条浏览日期，点击日期查看课表。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
 
         }else{
             scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
