@@ -7,6 +7,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.*;
+import android.os.Looper;
+import org.json.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import android.os.Environment;
 import android.content.Intent;
 import android.provider.Settings;
@@ -47,7 +56,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetContainer,widgetEditBar; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false;
+    private LinearLayout homeView,browserView,widgetContainer,widgetEditBar; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -142,8 +151,8 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<String> getWidgetOrder(){
         String saved=prefs.getString("home_widget_order","");
         ArrayList<String> order=new ArrayList<>();
-        if(saved.trim().isEmpty()){order.add("schedule");order.add("power");order.add("card");order.add("spend");return order;}
-        for(String id:saved.split(","))if(Arrays.asList("schedule","power","card","spend").contains(id)&&!order.contains(id))order.add(id);
+        if(saved.trim().isEmpty()||"schedule,power,card,spend".equals(saved)){order.add("schedule");order.add("power");order.add("weather");saveWidgetOrder(order);return order;}
+        for(String id:saved.split(","))if(Arrays.asList("schedule","power","weather","card","spend").contains(id)&&!order.contains(id))order.add(id);
         return order;
     }
     private void saveWidgetOrder(ArrayList<String> order){prefs.edit().putString("home_widget_order",android.text.TextUtils.join(",",order)).apply();}
@@ -153,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void showAddWidgetDialog(){
         ArrayList<String> order=getWidgetOrder(),missing=new ArrayList<>(),labels=new ArrayList<>();
-        String[] ids={"schedule","power","card","spend"},names={"课表","宿舍剩余电费","校园卡余额","本月支出"};
+        String[] ids={"schedule","power","weather","card","spend"},names={"课表","宿舍剩余电费","天气","校园卡余额","本月支出"};
         for(int i=0;i<ids.length;i++)if(!order.contains(ids[i])){missing.add(ids[i]);labels.add(names[i]);}
         if(missing.isEmpty()){Toast.makeText(this,"所有小组件都已添加",Toast.LENGTH_SHORT).show();return;}
         new AlertDialog.Builder(this).setTitle("添加小组件").setItems(labels.toArray(new String[0]),(d,w)->{order.add(missing.get(w));saveWidgetOrder(order);renderDashboardWidgets();setWidgetEditing(true);}).setNegativeButton("取消",null).show();
@@ -164,6 +173,7 @@ public class MainActivity extends AppCompatActivity {
             View content;
             if("schedule".equals(id))content=createScheduleWidget();
             else if("power".equals(id))content=createAccountWidget("⚡  宿舍剩余电费",prefs.getString("power","未同步"),"点击进入宿舍电费","https://billsys.ecjtu.edu.cn/student/#/");
+            else if("weather".equals(id))content=createWeatherWidget();
             else if("card".equals(id))content=createAccountWidget("▣  校园卡余额",prefs.getString("card","未同步"),"消费 / 充值","https://ecard.ecjtu.edu.cn/");
             else content=createAccountWidget("▥  本月支出",prefs.getString("spend","未同步"),"校园卡消费汇总","https://ecard.ecjtu.edu.cn/");
             android.widget.FrameLayout frame=new android.widget.FrameLayout(this);frame.setTag(id);frame.addView(content,new android.widget.FrameLayout.LayoutParams(-1,-2));
@@ -177,6 +187,102 @@ public class MainActivity extends AppCompatActivity {
     }
     private LinearLayout createAccountWidget(String label,String value,String hint,String url){
         LinearLayout c=card();c.setMinimumHeight(dp(132));c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);if(label.contains("宿舍"))powerValue=val;else if(label.contains("校园卡"))cardValue=val;else if(label.contains("本月"))spendValue=val;c.addView(t(hint,13,Color.rgb(85,157,255)));return c;
+    }
+
+
+    private LinearLayout createWeatherWidget(){
+        LinearLayout c=card();c.setMinimumHeight(dp(132));c.setOnClickListener(v->openWeather());
+        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView heading=title("☀  今日天气",16);row.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+        weatherWidgetCity=t(prefs.getString("weather_city","首次点击获取定位天气"),13,MUTED);row.addView(weatherWidgetCity);c.addView(row);
+        LinearLayout data=new LinearLayout(this);data.setGravity(Gravity.CENTER_VERTICAL);
+        weatherWidgetInfo=title(prefs.getString("weather_brief","点击查看天气详情"),25);data.addView(weatherWidgetInfo,new LinearLayout.LayoutParams(0,-2,1));
+        data.addView(t("详情  ›",13,BLUE));c.addView(data);
+        c.addView(t("数据来源 · 中央气象台",11,MUTED));return c;
+    }
+    private void openWeather(){
+        buildWeatherPage();
+        if(!prefs.getBoolean("weather_ready",false))requestWeatherLocation();
+        else if(System.currentTimeMillis()-prefs.getLong("weather_updated_ms",0)>30*60*1000L)fetchCmaWeather(prefs.getString("weather_station",""));
+    }
+    private void buildWeatherPage(){
+        weatherPage=new LinearLayout(this);weatherPage.setOrientation(LinearLayout.VERTICAL);weatherPage.setBackground(pageBackground());
+        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(12),dp(8),dp(12),dp(8));
+        Button back=navButton("‹ 返回",true);back.setOnClickListener(v->buildHome());bar.addView(back);
+        TextView title=title("天气",19);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(52),1));
+        Button refresh=navButton("刷新",false);refresh.setOnClickListener(v->{if(prefs.getBoolean("weather_ready",false))fetchCmaWeather(prefs.getString("weather_station",""));else requestWeatherLocation();});bar.addView(refresh);weatherPage.addView(bar);
+        ScrollView scroll=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(8),dp(18),dp(28));scroll.addView(body);weatherPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));setContentView(weatherPage);
+        if(weatherData==null){String cache=prefs.getString("weather_cache","");if(!cache.isEmpty())try{weatherData=new JSONObject(cache);}catch(Exception ignored){}}
+        renderWeatherPage();
+    }
+    private void requestWeatherLocation(){
+        if(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)!=PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},REQ_WEATHER_LOCATION);return;
+        }
+        acquireWeatherLocation();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==REQ_WEATHER_LOCATION){boolean granted=false;for(int result:grantResults)if(result==PackageManager.PERMISSION_GRANTED)granted=true;if(granted)acquireWeatherLocation();else new AlertDialog.Builder(this).setTitle("定位权限未开启").setMessage("天气组件需要定位来匹配当地中央气象台气象站。你也可以稍后在系统设置中开启定位权限。").setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show();}
+    }
+    @SuppressLint("MissingPermission") private void acquireWeatherLocation(){
+        try{
+            locationManager=(LocationManager)getSystemService(LOCATION_SERVICE);Location best=null;
+            for(String provider:locationManager.getProviders(true)){Location l=locationManager.getLastKnownLocation(provider);if(l!=null&&(best==null||l.getTime()>best.getTime()))best=l;}
+            if(best!=null&&System.currentTimeMillis()-best.getTime()<2*60*60*1000L){resolveCmaStation(best);return;}
+            weatherLocationListener=new LocationListener(){public void onLocationChanged(Location l){try{locationManager.removeUpdates(this);}catch(Exception ignored){}weatherLocationListener=null;resolveCmaStation(l);}public void onProviderEnabled(String p){}public void onProviderDisabled(String p){}public void onStatusChanged(String p,int status,android.os.Bundle b){}};
+            boolean requested=false;for(String provider:locationManager.getProviders(true))try{locationManager.requestLocationUpdates(provider,0,0,weatherLocationListener,Looper.getMainLooper());requested=true;}catch(Exception ignored){}
+            if(!requested)Toast.makeText(this,"请先开启系统定位服务",Toast.LENGTH_LONG).show();
+            new android.os.Handler().postDelayed(()->{if(weatherLocationListener!=null){try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}weatherLocationListener=null;Toast.makeText(this,"定位超时，请检查定位开关后重试",Toast.LENGTH_LONG).show();}},15000);
+        }catch(Exception e){diagnostic("天气","定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());Toast.makeText(this,"获取定位失败，请稍后重试",Toast.LENGTH_LONG).show();}
+    }
+    private void resolveCmaStation(Location location){
+        new Thread(()->{try{
+            Geocoder geocoder=new Geocoder(this,Locale.CHINA);List<Address> list=geocoder.getFromLocation(location.getLatitude(),location.getLongitude(),1);
+            if(list==null||list.isEmpty())throw new Exception("无法识别所在城市");Address address=list.get(0);
+            String province=address.getAdminArea(),city=address.getLocality();if(city==null||city.isEmpty())city=address.getSubAdminArea();
+            if(province==null||city==null)throw new Exception("定位结果缺少省市信息");
+            JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String provinceCode="";
+            for(int i=0;i<provinces.length();i++){JSONObject p=provinces.getJSONObject(i);String n=p.optString("name");if(n.contains(province.replace("省","").replace("市",""))||province.contains(n.replace("省","").replace("市",""))){provinceCode=p.optString("code");break;}}
+            if(provinceCode.isEmpty())throw new Exception("中央气象台暂未匹配到省份："+province);
+            JSONArray cities=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+provinceCode));JSONObject station=null;String target=city.replace("市","");
+            for(int i=0;i<cities.length();i++){JSONObject item=cities.getJSONObject(i);String n=item.optString("city");if(n.equals(city)||n.equals(target)||city.contains(n)){station=item;break;}}
+            if(station==null)throw new Exception("未找到对应的中央气象台气象站");
+            String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");
+            if(id.isEmpty())throw new Exception("气象站编号为空");
+            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).apply();
+            runOnUiThread(()->{diagnostic("天气","定位与气象站匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
+        }catch(Exception e){diagnostic("天气","定位与气象站匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->new AlertDialog.Builder(this).setTitle("天气定位失败").setMessage(e.getMessage()+"。请检查网络后重试。").setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show());}}).start();
+    }
+    private String weatherHttpGet(String address)throws Exception{
+        HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();connection.setRequestMethod("GET");connection.setConnectTimeout(10000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent","Mozilla/5.0 ECJTUEE Android");connection.setRequestProperty("Accept","application/json");
+        try{int status=connection.getResponseCode();if(status<200||status>=300)throw new Exception("中央气象台 HTTP "+status);BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream(),StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();String line;while((line=reader.readLine())!=null)out.append(line);reader.close();return out.toString();}finally{connection.disconnect();}
+    }
+    private void fetchCmaWeather(String station){
+        if(station==null||station.isEmpty())return;
+        new Thread(()->{try{
+            JSONObject root=new JSONObject(weatherHttpGet("https://www.nmc.cn/rest/weather?stationid="+Uri.encode(station)));JSONObject data=root.optJSONObject("data");if(data==null)throw new Exception("中央气象台未返回天气数据");
+            JSONObject real=data.optJSONObject("real");JSONObject weather=real==null?null:real.optJSONObject("weather");if(weather==null)throw new Exception("实时天气数据暂缺");
+            String city=real.optJSONObject("station")==null?prefs.getString("weather_city",""):real.optJSONObject("station").optString("city",prefs.getString("weather_city",""));
+            String description=weather.optString("info","天气"),temperature=weather.optString("temperature","--");String brief=description+"  "+temperature+"°";
+            weatherData=data;prefs.edit().putString("weather_city",city).putString("weather_brief",brief).putString("weather_cache",data.toString()).putLong("weather_updated_ms",System.currentTimeMillis()).apply();
+            diagnostic("天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
+            runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
+        }catch(Exception e){diagnostic("天气","中央气象台数据更新","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->{if(weatherData==null)Toast.makeText(this,"天气获取失败："+e.getMessage(),Toast.LENGTH_LONG).show();else Toast.makeText(this,"天气更新失败，正在显示缓存数据",Toast.LENGTH_SHORT).show();});}}).start();
+    }
+    private void renderWeatherPage(){
+        if(weatherPage==null)return;ScrollView scroll=(ScrollView)weatherPage.getChildAt(1);LinearLayout body=(LinearLayout)scroll.getChildAt(0);body.removeAllViews();
+        if(weatherData==null){TextView wait=title("正在连接中央气象台…",20);wait.setPadding(0,dp(45),0,dp(45));body.addView(wait);body.addView(t("首次使用需要定位并匹配附近气象站。",14,MUTED));return;}
+        try{
+            JSONObject real=weatherData.optJSONObject("real");JSONObject now=real==null?null:real.optJSONObject("weather");if(now==null)now=new JSONObject();JSONObject wind=real==null?null:real.optJSONObject("wind");if(wind==null)wind=new JSONObject();
+            LinearLayout hero=card();hero.setBackground(glass(28));hero.addView(t(prefs.getString("weather_city","当地天气")+" · 实时天气",15,MUTED));hero.addView(title(now.optString("temperature","--")+"°",62));hero.addView(title(now.optString("info","天气信息暂缺"),23));hero.addView(t("体感温度  "+now.optString("feelst","--")+"°     相对湿度  "+now.optString("humidity","--")+"%",14,MUTED));hero.addView(t("观测时间  "+(real==null?"":real.optString("publish_time","")),12,MUTED));body.addView(hero);addSpace(body,14);
+            LinearLayout details=card();details.addView(title("天气详情",18));details.addView(t("风向  "+wind.optString("direct","--")+"    风力  "+wind.optString("power","--"),14,MUTED));details.addView(t("风速  "+wind.optString("speed","--")+" m/s    气压  "+now.optString("airpressure","--")+" hPa",14,MUTED));details.addView(t("降水量  "+now.optString("rain","--")+" mm    能见度  "+now.optString("visibility","--"),14,MUTED));body.addView(details);addSpace(body,14);
+            JSONObject predict=weatherData.optJSONObject("predict");JSONArray days=predict==null?null:predict.optJSONArray("detail");LinearLayout forecast=card();forecast.addView(title("未来天气",18));
+            if(days!=null)for(int i=0;i<days.length();i++){JSONObject day=days.optJSONObject(i);if(day==null)continue;JSONObject daytime=day.optJSONObject("day"),night=day.optJSONObject("night");JSONObject dw=daytime==null?null:daytime.optJSONObject("weather"),nw=night==null?null:night.optJSONObject("weather");String line=day.optString("date")+"   "+(dw==null?"--":dw.optString("info","--"))+"  "+(dw==null?"":dw.optString("temperature",""))+"° / "+(nw==null?"":nw.optString("temperature",""))+"°   "+(nw==null?"":nw.optString("info",""));forecast.addView(t(line,13,MUTED));}
+            if(days==null||days.length()==0)forecast.addView(t("预报数据暂不可用",13,MUTED));body.addView(forecast);addSpace(body,14);
+            JSONObject warn=real==null?null:real.optJSONObject("warn");if(warn!=null&&!warn.optString("issuecontent","").isEmpty()){LinearLayout alert=card();alert.addView(title("气象预警",18));alert.addView(t(warn.optString("issuecontent"),14,MUTED));body.addView(alert);addSpace(body,12);}
+            body.addView(t("数据来源：中央气象台（国家气象中心）",12,MUTED));
+        }catch(Exception e){diagnostic("天气","详情渲染","失败",e.getClass().getSimpleName()+": "+e.getMessage());body.addView(t("天气详情暂时无法显示",14,MUTED));}
     }
 
     private LinearLayout createScheduleWidget(){
