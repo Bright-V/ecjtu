@@ -197,6 +197,7 @@ public class MainActivity extends AppCompatActivity {
             for(String id:order){
                 boolean fullWidth="schedule".equals(id);
                 int columnSpan=fullWidth?4:2;
+                android.widget.FrameLayout frame=createWidgetFrame(id);
                 int rowSpan=fullWidth?getScheduleWidgetRows():2;
                 int row=-1,col=-1;
                 search:
@@ -212,7 +213,6 @@ public class MainActivity extends AppCompatActivity {
                 for(int yy=row;yy<row+rowSpan&&yy<64;yy++)
                     for(int xx=col;xx<col+columnSpan;xx++)occupied[yy][xx]=true;
                 maxRow=Math.max(maxRow,row+rowSpan);
-                android.widget.FrameLayout frame=createWidgetFrame(id);
                 GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
                         GridLayout.spec(row,rowSpan),
                         GridLayout.spec(col,columnSpan,1f));
