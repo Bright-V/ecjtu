@@ -198,7 +198,7 @@ public class MainActivity extends AppCompatActivity {
             int rowSpan=fullWidth?8:2;
             android.widget.FrameLayout frame=createWidgetFrame(id);
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                    GridLayout.spec(GridLayout.UNDEFINED,rowSpan,1f),
+                    GridLayout.spec(GridLayout.UNDEFINED,rowSpan),
                     GridLayout.spec(GridLayout.UNDEFINED,columnSpan,1f));
             lp.width=0;
             lp.height=0;
@@ -210,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
                 if(measured instanceof GridLayout.LayoutParams){
                     GridLayout.LayoutParams sized=(GridLayout.LayoutParams)measured;
                     int width=frame.getWidth();
-                    int targetHeight=fullWidth?width/2:width;
+                    int targetHeight=fullWidth?width*2:width;
                     if(width>0&&sized.height!=targetHeight){sized.height=targetHeight;frame.setLayoutParams(sized);}
                 }
             });
@@ -234,7 +234,7 @@ public class MainActivity extends AppCompatActivity {
         target.setBackground(bg(Color.argb(38,125,177,235),18));
         TextView plus=t("＋",28,MUTED);plus.setGravity(Gravity.CENTER);target.addView(plus,new android.widget.FrameLayout.LayoutParams(-1,-1));
         GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED,2,1f),
+                GridLayout.spec(GridLayout.UNDEFINED,2),
                 GridLayout.spec(GridLayout.UNDEFINED,2,1f));
         lp.width=0;lp.height=0;lp.setMargins(dp(4),dp(4),dp(4),dp(12));
         target.setLayoutParams(lp);
