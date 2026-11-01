@@ -168,9 +168,10 @@ public class MainActivity extends AppCompatActivity {
             java.util.regex.Matcher pm=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\s+").matcher(line);
             if(pm.find()){period=pm.group(1);line=line.substring(pm.end()).trim();}
             String course=line,teacher="",room="";
-            java.util.regex.Matcher m=java.util.regex.Pattern.compile("^(.*?)\\s+([^\\s@]+)\\s+@([^\\s]+)(?:\\s+[\\d,-]+\\s+[\\d,]+)?$").matcher(line);
+            line=line.replaceFirst("\\s+\\d+(?:-\\d+)?(?:\\s*,\\s*\\d+(?:-\\d+)?)*(?:\\s*[（(](?:单|双)[）)])?\\s+[\\d,]+$","").trim();
+            java.util.regex.Matcher m=java.util.regex.Pattern.compile("^(.*?)\\s+([^\\s@]+)\\s+@([^\\s]+)$").matcher(line);
             if(m.matches()){course=m.group(1).trim();teacher=m.group(2).trim();room="@"+m.group(3).trim();}
-            else{java.util.regex.Matcher r=java.util.regex.Pattern.compile("^(.*?)\\s+@([^\\s]+)(?:\\s+[\\d,-]+\\s+[\\d,]+)?$").matcher(line);if(r.matches()){course=r.group(1).trim();room="@"+r.group(2).trim();}}
+            else{java.util.regex.Matcher r=java.util.regex.Pattern.compile("^(.*?)\\s+@([^\\s]+)$").matcher(line);if(r.matches()){course=r.group(1).trim();room="@"+r.group(2).trim();}}
             LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.TOP);
             LinearLayout periodColumn=new LinearLayout(this);periodColumn.setOrientation(LinearLayout.VERTICAL);periodColumn.setGravity(Gravity.TOP|Gravity.CENTER_HORIZONTAL);periodColumn.setPadding(0,dp(9),dp(5),0);
             TextView dot=t("●",12,BLUE);dot.setGravity(Gravity.CENTER);dot.setPadding(0,0,0,dp(3));periodColumn.addView(dot);
@@ -186,49 +187,53 @@ public class MainActivity extends AppCompatActivity {
     }
     private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
     private String[] splitCourseEntries(String rawDay){
-        String[] lines=rawDay.split("\\n");
         ArrayList<String> entries=new ArrayList<>();
-        StringBuilder course=new StringBuilder();
-        boolean foundWeekLine=false;
-        java.util.regex.Pattern slotPattern=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\s*(?:\\t|\\s{2,})(.*)$");
-        java.util.regex.Pattern weekPattern=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s*[（(]?(?:单|雙|双)?[）)]?\\s+[\\d,]+$");
-        for(String rawLine:lines){
+        if(rawDay==null||rawDay.trim().isEmpty())return new String[0];
+        String currentSlot="";
+        ArrayList<String> block=new ArrayList<>();
+        java.util.regex.Pattern slotPattern=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)(?:\\t| {2,})(.*)$");
+        java.util.regex.Pattern weekPattern=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:\\s*,\\s*\\d+(?:-\\d+)?)*(?:\\s*[（(](?:单|双)[）)])?\\s+[\\d,]+$");
+        for(String rawLine:rawDay.replace("\\r","").split("\\n")){
             String line=rawLine.trim().replaceFirst("^[•·]\\s*","");
             if(line.isEmpty())continue;
             java.util.regex.Matcher slot=slotPattern.matcher(line);
             if(slot.matches()){
-                if(course.length()>0){entries.add(course.toString().trim());course.setLength(0);}
-                course.append(slot.group(1)).append(" ").append(slot.group(2).trim());
+                if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,null);
+                currentSlot=slot.group(1);
+                block.clear();
+                if(!slot.group(2).trim().isEmpty())block.add(slot.group(2).trim());
                 continue;
             }
-            boolean weekLine=weekPattern.matcher(line).matches();
-            if(weekLine){
-                foundWeekLine=true;
-                if(course.length()>0){course.append(" ").append(line);entries.add(course.toString().trim());course.setLength(0);}
-                else entries.add(line);
-            }else{
-                if(course.length()>0)course.append(" ");
-                course.append(line);
+            if(weekPattern.matcher(line).matches()){
+                if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,line);
+                block.clear();
+            }else if(!line.equals("-")&&!line.equals("无")){
+                block.add(line);
             }
         }
-        if(course.length()>0)entries.add(course.toString().trim());
-        if(entries.isEmpty()){
-            for(String rawLine:lines){String line=rawLine.trim();if(!line.isEmpty())entries.add(line);}
-        }
+        if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,null);
         return entries.toArray(new String[0]);
     }
-
+    private void appendCourseEntry(ArrayList<String> entries,String slot,ArrayList<String> block,String weekLine){
+        if(block.isEmpty())return;
+        StringBuilder item=new StringBuilder();
+        if(slot!=null&&!slot.isEmpty())item.append(slot).append(" ");
+        for(String part:block){if(item.length()>0)item.append(" ");item.append(part.trim());}
+        if(weekLine!=null&&!weekLine.trim().isEmpty())item.append(" ").append(weekLine.trim());
+        entries.add(item.toString().trim());
+    }
     private boolean courseOccursInWeek(String line,int weekNo){
         if(weekNo<=0)return true;
-        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\s)([0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)*)*)\\s*[（(]?(单|双)?[）)]?\\s+[0-9,]+$").matcher(line.trim());
-        if(!m.find())return true;
-        String parity=m.group(2);
-        String[] ranges=m.group(1).split(",");
-        for(String part:ranges){
+        java.util.regex.Matcher tail=java.util.regex.Pattern.compile("((?:\\d+(?:-\\d+)?(?:\\s*[（(](?:单|双)[）)])?\\s*,\\s*)*\\d+(?:-\\d+)?(?:\\s*[（(](?:单|双)[）)])?)\\s+[\\d,]+$").matcher(line.trim());
+        if(!tail.find())return true;
+        String[] ranges=tail.group(1).split("\\s*,\\s*");
+        for(String range:ranges){
+            java.util.regex.Matcher part=java.util.regex.Pattern.compile("^(\\d+)(?:-(\\d+))?\\s*[（(]?(单|双)?[）)]?$").matcher(range.trim());
+            if(!part.matches())continue;
             try{
-                String[] ends=part.split("-");
-                int first=Integer.parseInt(ends[0]);
-                int last=ends.length>1?Integer.parseInt(ends[1]):first;
+                int first=Integer.parseInt(part.group(1));
+                int last=part.group(2)==null?first:Integer.parseInt(part.group(2));
+                String parity=part.group(3);
                 if(weekNo<first||weekNo>last)continue;
                 if("单".equals(parity)&&weekNo%2==0)continue;
                 if("双".equals(parity)&&weekNo%2!=0)continue;
@@ -237,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return false;
     }
-        private int getSchoolWeek(Calendar today){
+    private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
         if(start.length()==0)return 0;
         try{
