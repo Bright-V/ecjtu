@@ -57,7 +57,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private ScrollView homeScrollView,scheduleScrollView; private boolean scheduleTouchInProgress=false; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -126,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void buildHome(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackground(pageBackground());applyPagePadding(root,0,dp(30),0,0);
-        ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
+        ScrollView scroll=new ScrollView(this);homeScrollView=scroll;homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground); homeRefresh.setOnChildScrollUpCallback((parent,child)->{ boolean outerCanScrollUp=homeScrollView!=null&&homeScrollView.canScrollVertically(-1); boolean innerScheduleCanScrollUp=scheduleTouchInProgress&&scheduleScrollView!=null&&scheduleScrollView.canScrollVertically(-1); return outerCanScrollUp||innerScheduleCanScrollUp; });
 
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";int week=getSchoolWeek(cal);String weekText=week>0?"第"+week+"周":"未设置周次";
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.BOTTOM);
@@ -574,50 +574,41 @@ public class MainActivity extends AppCompatActivity {
         final float[] scheduleTouchStart={0f,0f};
         final int[] scheduleGestureAxis={0}; // 0=未判定，1=纵向，2=横向
         ScrollView scheduleScroll=new ScrollView(this){
+            @Override public boolean dispatchTouchEvent(android.view.MotionEvent event){
+                int action=event.getActionMasked();
+                if(action==android.view.MotionEvent.ACTION_DOWN)scheduleTouchInProgress=true;
+                try{return super.dispatchTouchEvent(event);}
+                finally{if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL)scheduleTouchInProgress=false;}
+            }
             @Override public boolean onInterceptTouchEvent(android.view.MotionEvent event){
                 int action=event.getActionMasked();
                 if(action==android.view.MotionEvent.ACTION_DOWN){
-                    scheduleTouchStart[0]=event.getX();scheduleTouchStart[1]=event.getY();
-                    scheduleGestureAxis[0]=0;
-                    // 在 ScrollView 的拦截层处理，子课程卡片即使可点击也不会绕过手势仲裁。
+                    scheduleTouchStart[0]=event.getX();scheduleTouchStart[1]=event.getY();scheduleGestureAxis[0]=0;
                     getParent().requestDisallowInterceptTouchEvent(true);
-                    return super.onInterceptTouchEvent(event);
-                }
-                if(action==android.view.MotionEvent.ACTION_MOVE){
+                }else if(action==android.view.MotionEvent.ACTION_MOVE){
                     float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
                     int slop=android.view.ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
-                    if(scheduleGestureAxis[0]==0&&(Math.abs(dx)>slop||Math.abs(dy)>slop)){
-                        scheduleGestureAxis[0]=Math.abs(dx)>Math.abs(dy)?2:1;
-                    }
-                    if(scheduleGestureAxis[0]==2){
-                        getParent().requestDisallowInterceptTouchEvent(true);
-                        return true; // 横向手势由课表接管，保持原有切换日期行为。
-                    }
+                    if(scheduleGestureAxis[0]==0&&(Math.abs(dx)>slop||Math.abs(dy)>slop))scheduleGestureAxis[0]=Math.abs(dx)>Math.abs(dy)?2:1;
+                    if(scheduleGestureAxis[0]==2){getParent().requestDisallowInterceptTouchEvent(true);return true;}
                     if(scheduleGestureAxis[0]==1){
                         boolean innerCanScroll=dy<0?canScrollVertically(1):canScrollVertically(-1);
                         getParent().requestDisallowInterceptTouchEvent(innerCanScroll);
-                        // 内层到达对应边界时不拦截，让外层首页/下拉刷新接管。
                         if(!innerCanScroll)return false;
-                        return super.onInterceptTouchEvent(event);
                     }
                 }
                 return super.onInterceptTouchEvent(event);
             }
             @Override public boolean onTouchEvent(android.view.MotionEvent event){
-                if(event.getActionMasked()==android.view.MotionEvent.ACTION_UP){
+                int action=event.getActionMasked();
+                if(action==android.view.MotionEvent.ACTION_UP){
                     float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
-                    if(scheduleGestureAxis[0]==2&&Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy)){
-                        selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));
-                    }
-                    getParent().requestDisallowInterceptTouchEvent(false);
-                    scheduleGestureAxis[0]=0;
-                }else if(event.getActionMasked()==android.view.MotionEvent.ACTION_CANCEL){
-                    getParent().requestDisallowInterceptTouchEvent(false);
-                    scheduleGestureAxis[0]=0;
-                }
+                    if(scheduleGestureAxis[0]==2&&Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));
+                    getParent().requestDisallowInterceptTouchEvent(false);scheduleGestureAxis[0]=0;
+                }else if(action==android.view.MotionEvent.ACTION_CANCEL){getParent().requestDisallowInterceptTouchEvent(false);scheduleGestureAxis[0]=0;}
                 return super.onTouchEvent(event);
             }
         };
+        scheduleScrollView=scheduleScroll;
         scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         LinearLayout scheduleContent=new LinearLayout(this);scheduleContent.setOrientation(LinearLayout.VERTICAL);scheduleScroll.addView(scheduleContent,new ScrollView.LayoutParams(-1,-2));
         schedule.addView(scheduleScroll,new LinearLayout.LayoutParams(-1,0,1));
