@@ -56,7 +56,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private ScrollView scheduleWidgetScroll; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -256,14 +256,21 @@ public class MainActivity extends AppCompatActivity {
         }finally{renderingDashboardWidgets=false;}
     }
     private int getScheduleWidgetRows(){
-        int courses=0;
-        if(scheduleTimeline!=null){
-            for(int i=0;i<scheduleTimeline.getChildCount();i++){
-                View child=scheduleTimeline.getChildAt(i);
-                if(child instanceof LinearLayout && ((LinearLayout)child).getOrientation()==LinearLayout.HORIZONTAL)courses++;
-            }
+        boolean multiDay=prefs!=null&&prefs.getBoolean("showMultiDaySchedule",true);
+        String value;
+        if(multiDay){
+            value=scheduleDays!=null&&selectedScheduleIndex>=0&&selectedScheduleIndex<scheduleDays.length?scheduleDays[selectedScheduleIndex]:"";
+            if(value==null||value.trim().isEmpty())value=selectedScheduleIndex==15?prefs.getString("schedule",""):"";
+        }else{
+            value=prefs==null?"":prefs.getString("schedule","尚未同步课表");
         }
-        return Math.max(3,Math.min(5,courses));
+        int courses=splitCourseEntries(value).length;
+        if(multiDay){
+            if(courses<=0)return 3;
+            if(courses==1)return 4;
+            return 5;
+        }
+        return Math.max(1,Math.min(5,courses));
     }
     private View createWidgetDropTarget(int targetIndex){
         android.widget.FrameLayout target=new android.widget.FrameLayout(this);
@@ -408,7 +415,15 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(glass(26));schedule.setElevation(dp(3));
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
-        ScrollView scheduleScroll=new ScrollView(this);scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        ScrollView scheduleScroll=new ScrollView(this);scheduleWidgetScroll=scheduleScroll;scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scheduleScroll.setOnTouchListener((v,event)->{
+            if(homeRefresh!=null){
+                int action=event.getActionMasked();
+                if(action==android.view.MotionEvent.ACTION_DOWN||action==android.view.MotionEvent.ACTION_MOVE)homeRefresh.requestDisallowInterceptTouchEvent(true);
+                else if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL)homeRefresh.requestDisallowInterceptTouchEvent(false);
+            }
+            return false;
+        });
         LinearLayout scheduleContent=new LinearLayout(this);scheduleContent.setOrientation(LinearLayout.VERTICAL);scheduleScroll.addView(scheduleContent,new ScrollView.LayoutParams(-1,-2));
         schedule.addView(scheduleScroll,new LinearLayout.LayoutParams(-1,0,1));
         boolean showMultiDay=prefs.getBoolean("showMultiDaySchedule",true);
