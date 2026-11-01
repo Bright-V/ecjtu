@@ -188,7 +188,7 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
 
     private boolean courseOccursInWeek(String line,int weekNo){
         if(weekNo<=0)return true;
-        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\\\s)([0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)*)*)\\\\s*[（(]?(单|双)?[）)]?\\\\s+[0-9,]+$").matcher(line.trim());
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\s)([0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)*)*)\\s*[（(]?(单|双)?[）)]?\\s+[0-9,]+$").matcher(line.trim());
         if(!m.find())return true;
         String parity=m.group(2);
         String[] ranges=m.group(1).split(",");
