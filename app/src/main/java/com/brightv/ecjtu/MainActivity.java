@@ -572,24 +572,27 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
         ScrollView scheduleScroll=new ScrollView(this);scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        final float[] scheduleTouchStartY={0f};
+        final float[] scheduleTouchStart={0f,0f};
         scheduleScroll.setOnTouchListener((v,event)->{
-            if(homeRefresh==null)return false;
             int action=event.getActionMasked();
             if(action==android.view.MotionEvent.ACTION_DOWN){
-                scheduleTouchStartY[0]=event.getY();
-                homeRefresh.requestDisallowInterceptTouchEvent(false);
+                scheduleTouchStart[0]=event.getX();scheduleTouchStart[1]=event.getY();
+                v.getParent().requestDisallowInterceptTouchEvent(true);
             }else if(action==android.view.MotionEvent.ACTION_MOVE){
-                float deltaY=event.getY()-scheduleTouchStartY[0];
-                int touchSlop=android.view.ViewConfiguration.get(this).getScaledTouchSlop();
-                if(Math.abs(deltaY)>touchSlop){
-                    // Let the course list consume upward gestures and downward gestures
-                    // while it can still scroll; at its top, let SwipeRefreshLayout take over.
-                    boolean keepInside=deltaY<0||v.getScrollY()>0;
-                    homeRefresh.requestDisallowInterceptTouchEvent(keepInside);
+                float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
+                int slop=android.view.ViewConfiguration.get(this).getScaledTouchSlop();
+                if(Math.abs(dx)>slop&&Math.abs(dx)>Math.abs(dy)){
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                }else if(Math.abs(dy)>slop){
+                    boolean canScroll=dy<0?v.canScrollVertically(1):v.canScrollVertically(-1);
+                    v.getParent().requestDisallowInterceptTouchEvent(canScroll);
                 }
-            }else if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL){
-                homeRefresh.requestDisallowInterceptTouchEvent(false);
+            }else if(action==android.view.MotionEvent.ACTION_UP){
+                float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
+                if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));
+                v.getParent().requestDisallowInterceptTouchEvent(false);
+            }else if(action==android.view.MotionEvent.ACTION_CANCEL){
+                v.getParent().requestDisallowInterceptTouchEvent(false);
             }
             return false;
         });
@@ -600,7 +603,7 @@ public class MainActivity extends AppCompatActivity {
             scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);scheduleContent.addView(scheduleDayScroll,dayLp);
             String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
             scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
-            scheduleTimeline.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();}else if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));}return false;}});
+
         }else{
             scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
             scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);scheduleContent.addView(scheduleValue);
@@ -610,8 +613,50 @@ public class MainActivity extends AppCompatActivity {
     private int dayOfWeekIndex(Calendar date){int d=date.get(Calendar.DAY_OF_WEEK);return d==Calendar.SUNDAY?6:d-2;}
     private String relativeDayLabel(int offset){if(offset==0)return "今天";if(offset==1)return "明天";if(offset==2)return "后天";if(offset==-1)return "昨天";if(offset==-2)return "前天";return offset>0?offset+"天后":(-offset)+"天前";}
     private Calendar scheduleDateAt(int index){Calendar d=Calendar.getInstance();d.set(Calendar.HOUR_OF_DAY,0);d.set(Calendar.MINUTE,0);d.set(Calendar.SECOND,0);d.set(Calendar.MILLISECOND,0);d.add(Calendar.DAY_OF_MONTH,index-15);return d;}
-    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(i==selectedScheduleIndex?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);renderScheduleTimeline(value);if(widgetContainer!=null&&!renderingDashboardWidgets)renderDashboardWidgets();}
-        private void renderScheduleTimeline(String value){
+    private void renderScheduleDayStrip(){
+        if(scheduleDayStrip==null)return;
+        scheduleDayStrip.removeAllViews();
+        for(int i=0;i<31;i++){
+            Calendar d=scheduleDateAt(i);
+            String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());
+            TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);
+            b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);
+            b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);
+            b.setBackground(i==selectedScheduleIndex?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));
+            b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);
+            scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));
+        }
+        centerSelectedScheduleDay();
+    }
+    private void updateScheduleDayStripSelection(){
+        if(scheduleDayStrip==null)return;
+        for(int i=0;i<scheduleDayStrip.getChildCount();i++){
+            View child=scheduleDayStrip.getChildAt(i);boolean selected=i==selectedScheduleIndex;
+            if(child instanceof TextView){
+                TextView day=(TextView)child;day.setTypeface(null,selected?Typeface.BOLD:Typeface.NORMAL);
+                day.setTextColor(selected?Color.WHITE:MUTED);
+                day.setBackground(selected?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));
+            }
+        }
+        centerSelectedScheduleDay();
+    }
+    private void centerSelectedScheduleDay(){
+        if(scheduleDayScroll!=null&&scheduleDayStrip!=null)scheduleDayScroll.post(()->{
+            View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);
+            if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);
+        });
+    }
+    private void updateScheduleDayDisplay(){
+        if(scheduleDateLabel==null||scheduleValue==null)return;
+        Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;
+        scheduleDateLabel.setText(relativeDayLabel(offset)+"\\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));
+        scheduleDateLabel.setLineSpacing(dp(2),1.0f);
+        String value=scheduleDays[selectedScheduleIndex];
+        if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";
+        scheduleValue.setText(value);renderScheduleTimeline(value);
+    }
+    private void renderScheduleTimeline(String value){
         if(scheduleTimeline==null)return;
         scheduleTimeline.removeAllViews();
         if(value==null||value.trim().isEmpty()||value.contains("暂无课程")||value.contains("今日无事")||value.contains("尚未同步")){
@@ -642,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if(count==0){TextView empty=t("当天没有安排课程",15,MUTED);empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(30),0,dp(30));scheduleTimeline.addView(empty);}
     }
-    private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
+    private void selectScheduleDay(int index){if(index<0||index>30||index==selectedScheduleIndex)return;selectedScheduleIndex=index;updateScheduleDayStripSelection();updateScheduleDayDisplay();}
     private String[] splitCourseEntries(String rawDay){return CourseScheduleParser.splitCourseEntries(rawDay);}
 
     private boolean courseOccursInWeek(String line,int weekNo){return CourseScheduleParser.courseOccursInWeek(line,weekNo);}
