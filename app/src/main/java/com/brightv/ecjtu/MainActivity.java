@@ -152,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
         TextView editHint=t("长按卡片进入编辑，可拖动排序",12,MUTED);widgetEditBar.addView(editHint,new LinearLayout.LayoutParams(0,-2,1));
         Button addWidget=navButton("＋ 添加",true);addWidget.setOnClickListener(v->showAddWidgetDialog());widgetEditBar.addView(addWidget,new LinearLayout.LayoutParams(dp(96),dp(44)));
         Button doneWidget=navButton("完成",true);doneWidget.setOnClickListener(v->setWidgetEditing(false));widgetEditBar.addView(doneWidget,new LinearLayout.LayoutParams(dp(76),dp(44)));
-        homeView.addView(widgetEditBar);widgetContainer=new GridLayout(this);widgetContainer.setColumnCount(3);homeView.addView(widgetContainer);renderDashboardWidgets();
+        homeView.addView(widgetEditBar);widgetContainer=new GridLayout(this);widgetContainer.setColumnCount(4);homeView.addView(widgetContainer);renderDashboardWidgets();
                 homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
 
         LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackground(glass(24));nav.setElevation(dp(8));nav.setClipToOutline(true);
@@ -186,32 +186,36 @@ public class MainActivity extends AppCompatActivity {
     private void renderDashboardWidgets(){
         if(widgetContainer==null)return;
         widgetContainer.removeAllViews();
-        widgetContainer.setColumnCount(3);
+        widgetContainer.setColumnCount(4);
         widgetContainer.setRowCount(GridLayout.UNDEFINED);
         widgetContainer.setUseDefaultMargins(false);
         widgetContainer.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
         ArrayList<String> order=getWidgetOrder();
-        int occupied=0;
+        int occupiedColumns=0;
         for(String id:order){
-            int span="schedule".equals(id)?2:1;
+            boolean fullWidth="schedule".equals(id);
+            int columnSpan=fullWidth?4:2;
+            int rowSpan=fullWidth?1:2;
             android.widget.FrameLayout frame=createWidgetFrame(id);
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                    GridLayout.spec(GridLayout.UNDEFINED,span,1f),
-                    GridLayout.spec(GridLayout.UNDEFINED,1f));
+                    GridLayout.spec(GridLayout.UNDEFINED,rowSpan,1f),
+                    GridLayout.spec(GridLayout.UNDEFINED,columnSpan,1f));
             lp.width=0;
-            lp.height=dp("schedule".equals(id)?250:164);
+            lp.height=dp(fullWidth?250:164);
             lp.setMargins(dp(4),dp(4),dp(4),dp(12));
             frame.setLayoutParams(lp);
             widgetContainer.addView(frame);
-            occupied+=span;
+            occupiedColumns+=columnSpan;
         }
-        int emptyCells=(3-(occupied%3))%3;
-        for(int i=0;i<emptyCells;i++)widgetContainer.addView(createWidgetDropTarget(order.size()+i));
+        int emptyColumns=(4-(occupiedColumns%4))%4;
+        for(int i=0;i<emptyColumns;i+=2){
+            widgetContainer.addView(createWidgetDropTarget(order.size()+i/2));
+        }
         if(order.isEmpty()){
             TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(0,dp(28),0,dp(28));
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(0,1f),GridLayout.spec(0,3,1f));
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(0,1f),GridLayout.spec(0,4,1f));
             lp.width=0;lp.height=dp(100);widgetContainer.addView(empty,lp);
         }
     }
@@ -221,8 +225,8 @@ public class MainActivity extends AppCompatActivity {
         target.setBackground(bg(Color.argb(38,125,177,235),18));
         TextView plus=t("＋",28,MUTED);plus.setGravity(Gravity.CENTER);target.addView(plus,new android.widget.FrameLayout.LayoutParams(-1,-1));
         GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED,1,1f),
-                GridLayout.spec(GridLayout.UNDEFINED,1f));
+                GridLayout.spec(GridLayout.UNDEFINED,2,1f),
+                GridLayout.spec(GridLayout.UNDEFINED,2,1f));
         lp.width=0;lp.height=dp(164);lp.setMargins(dp(4),dp(4),dp(4),dp(12));
         target.setLayoutParams(lp);
         target.setOnDragListener((v,event)->{
