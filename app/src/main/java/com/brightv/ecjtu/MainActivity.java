@@ -271,14 +271,14 @@ public class MainActivity extends AppCompatActivity {
             try{
                 java.net.URL url=new java.net.URL("https://v1.hitokoto.cn/?encode=json");
                 conn=(java.net.HttpURLConnection)url.openConnection();conn.setConnectTimeout(5000);conn.setReadTimeout(5000);conn.setRequestMethod("GET");conn.setRequestProperty("Accept","application/json");
-                if(conn.getResponseCode()!=200)throw new java.io.IOException("HTTP "+conn.getResponseCode());
+                int http=conn.getResponseCode();diagnostic("每日一言","HTTP请求",http==200?"成功":"失败","HTTP状态码="+http);if(http!=200)throw new java.io.IOException("HTTP "+http);
                 java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
-                org.json.JSONObject o=new org.json.JSONObject(raw.toString());String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
+                String rawText=raw.toString();prefs.edit().putString("diag_hitokoto_raw",diagnosticText(rawText,1800)).apply();diagnostic("每日一言","原始响应","已获取",diagnosticText(rawText,1800));org.json.JSONObject o=new org.json.JSONObject(rawText);String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
                 if("null".equalsIgnoreCase(from))from="";if("null".equalsIgnoreCase(who))who="";if(quote.isEmpty())return;
                 String source="";if(!who.isEmpty()&&!from.isEmpty())source="—— "+who+" · "+from;else if(!who.isEmpty())source="—— "+who;else if(!from.isEmpty())source="—— "+from;
-                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();
+                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();diagnostic("每日一言","JSON解析与缓存","成功","句子长度="+quote.length()+"；来源="+source);
                 final String finalSource=source;runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null){hitokotoFrom.setText(finalSource);hitokotoFrom.setVisibility(finalSource.isEmpty()?View.GONE:View.VISIBLE);}});
-            }catch(Exception ignored){}finally{if(conn!=null)conn.disconnect();}
+            }catch(Exception e){diagnostic("每日一言","请求或解析","失败",e.getClass().getSimpleName()+": "+e.getMessage());}finally{if(conn!=null)conn.disconnect();}
         }).start();
     }
 
