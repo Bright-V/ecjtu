@@ -375,9 +375,9 @@ public class MainActivity extends AppCompatActivity {
             log.append("最近抓取时间: ").append(lastJwxtCaptureAt.isEmpty()?"无":lastJwxtCaptureAt).append("\n");
             log.append("最近一次缓存课表存在: ").append(prefs.contains("schedule")).append("\n");
             log.append("\n========== A. 教务原始抓取数据（按星期/节次分组） ==========\n");
-            log.append(lastJwxtRawData.isEmpty()?"暂无原始课表数据。请登录智慧教务并刷新首页后重新导出。":lastJwxtRawData).append("\n");
+            log.append((lastJwxtRawData.isEmpty()?prefs.getString("diag_jwxt_raw",""):lastJwxtRawData).isEmpty()?"暂无原始课表数据。请登录智慧教务并刷新首页后重新导出。":(lastJwxtRawData.isEmpty()?prefs.getString("diag_jwxt_raw",""):lastJwxtRawData)).append("\n");
             log.append("\n========== B. 应用解析后的课表 ==========\n");
-            log.append(lastJwxtParsedData.isEmpty()?"暂无解析结果。":lastJwxtParsedData).append("\n");
+            log.append((lastJwxtParsedData.isEmpty()?prefs.getString("diag_jwxt_parsed",""):lastJwxtParsedData).isEmpty()?"暂无解析结果。":(lastJwxtParsedData.isEmpty()?prefs.getString("diag_jwxt_parsed",""):lastJwxtParsedData)).append("\n");
             log.append("\n========== C. 当前缓存的31天课表 ==========\n");
             String packed=prefs.getString("scheduleDays","");
             if(packed.isEmpty())log.append("暂无缓存。\n");
@@ -491,9 +491,9 @@ public class MainActivity extends AppCompatActivity {
                     for(int i=0;i<7;i++){
                         try{String decoded=java.net.URLDecoder.decode(encoded[i],"UTF-8").replace("\\r","").replace("\\\\n","\\n").replace("\\n","\\n");rawDiagnostic.append("【").append(weekdayNames[i]).append("】\n").append(decoded.isEmpty()?"（空）":decoded).append("\n");}catch(Exception ex){rawDiagnostic.append("【").append(weekdayNames[i]).append("】解码失败: ").append(ex.getClass().getSimpleName()).append("\n");}
                     }
-                    lastJwxtRawData=rawDiagnostic.toString();
+                    lastJwxtRawData=rawDiagnostic.toString();prefs.edit().putString("diag_jwxt_raw",lastJwxtRawData).apply();
                     lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());
-                    lastJwxtCaptureStatus="成功：读取到 JWCAP7，星期列数="+encoded.length;
+                    lastJwxtCaptureStatus="成功：读取到 JWCAP7，星期列数="+encoded.length;prefs.edit().putString("diag_jwxt_status",lastJwxtCaptureStatus).putString("diag_jwxt_at",lastJwxtCaptureAt).apply();
                     for(int i=0;i<7;i++){
                         try{weekdayCourses[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){weekdayCourses[i]="";}
                         if(!weekdayCourses[i].isEmpty()){
@@ -513,7 +513,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     StringBuilder parsedDiagnostic=new StringBuilder();
                     for(int i=0;i<7;i++){parsedDiagnostic.append("【").append(weekdayNames[i]).append("】\n");for(String item:splitCourseEntries(weekdayCourses[i]))parsedDiagnostic.append("  ").append(item).append("\n");}
-                    lastJwxtParsedData=parsedDiagnostic.toString();
+                    lastJwxtParsedData=parsedDiagnostic.toString();prefs.edit().putString("diag_jwxt_parsed",lastJwxtParsedData).apply();
                     scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
                     prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
                     selectedScheduleIndex=15;todaySummary=days[15];saveValue("schedule",todaySummary);
