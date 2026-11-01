@@ -201,10 +201,20 @@ public class MainActivity extends AppCompatActivity {
                     GridLayout.spec(GridLayout.UNDEFINED,rowSpan,1f),
                     GridLayout.spec(GridLayout.UNDEFINED,columnSpan,1f));
             lp.width=0;
-            lp.height=dp(fullWidth?250:164);
+            lp.height=fullWidth?android.view.ViewGroup.LayoutParams.WRAP_CONTENT:0;
             lp.setMargins(dp(4),dp(4),dp(4),dp(12));
             frame.setLayoutParams(lp);
             widgetContainer.addView(frame);
+            if(!fullWidth){
+                frame.post(()->{
+                    android.view.ViewGroup.LayoutParams measured=frame.getLayoutParams();
+                    if(measured instanceof GridLayout.LayoutParams){
+                        GridLayout.LayoutParams square=(GridLayout.LayoutParams)measured;
+                        int side=frame.getWidth();
+                        if(side>0&&square.height!=side){square.height=side;frame.setLayoutParams(square);}
+                    }
+                });
+            }
             occupiedColumns+=columnSpan;
         }
         int emptyColumns=(4-(occupiedColumns%4))%4;
@@ -227,8 +237,16 @@ public class MainActivity extends AppCompatActivity {
         GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
                 GridLayout.spec(GridLayout.UNDEFINED,2,1f),
                 GridLayout.spec(GridLayout.UNDEFINED,2,1f));
-        lp.width=0;lp.height=dp(164);lp.setMargins(dp(4),dp(4),dp(4),dp(12));
+        lp.width=0;lp.height=0;lp.setMargins(dp(4),dp(4),dp(4),dp(12));
         target.setLayoutParams(lp);
+        target.post(()->{
+            android.view.ViewGroup.LayoutParams measured=target.getLayoutParams();
+            if(measured instanceof GridLayout.LayoutParams){
+                GridLayout.LayoutParams square=(GridLayout.LayoutParams)measured;
+                int side=target.getWidth();
+                if(side>0&&square.height!=side){square.height=side;target.setLayoutParams(square);}
+            }
+        });
         target.setOnDragListener((v,event)->{
             if(event.getAction()==android.view.DragEvent.ACTION_DROP){
                 String from=String.valueOf(event.getLocalState());
