@@ -195,26 +195,25 @@ public class MainActivity extends AppCompatActivity {
         for(String id:order){
             boolean fullWidth="schedule".equals(id);
             int columnSpan=fullWidth?4:2;
-            int rowSpan=fullWidth?1:2;
+            int rowSpan=fullWidth?8:2;
             android.widget.FrameLayout frame=createWidgetFrame(id);
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
                     GridLayout.spec(GridLayout.UNDEFINED,rowSpan,1f),
                     GridLayout.spec(GridLayout.UNDEFINED,columnSpan,1f));
             lp.width=0;
-            lp.height=fullWidth?android.view.ViewGroup.LayoutParams.WRAP_CONTENT:0;
+            lp.height=0;
             lp.setMargins(dp(4),dp(4),dp(4),dp(12));
             frame.setLayoutParams(lp);
             widgetContainer.addView(frame);
-            if(!fullWidth){
-                frame.post(()->{
-                    android.view.ViewGroup.LayoutParams measured=frame.getLayoutParams();
-                    if(measured instanceof GridLayout.LayoutParams){
-                        GridLayout.LayoutParams square=(GridLayout.LayoutParams)measured;
-                        int side=frame.getWidth();
-                        if(side>0&&square.height!=side){square.height=side;frame.setLayoutParams(square);}
-                    }
-                });
-            }
+            frame.post(()->{
+                android.view.ViewGroup.LayoutParams measured=frame.getLayoutParams();
+                if(measured instanceof GridLayout.LayoutParams){
+                    GridLayout.LayoutParams sized=(GridLayout.LayoutParams)measured;
+                    int width=frame.getWidth();
+                    int targetHeight=fullWidth?width/2:width;
+                    if(width>0&&sized.height!=targetHeight){sized.height=targetHeight;frame.setLayoutParams(sized);}
+                }
+            });
             occupiedColumns+=columnSpan;
         }
         int emptyColumns=(4-(occupiedColumns%4))%4;
@@ -392,15 +391,18 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(glass(26));schedule.setElevation(dp(3));
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
+        ScrollView scheduleScroll=new ScrollView(this);scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        LinearLayout scheduleContent=new LinearLayout(this);scheduleContent.setOrientation(LinearLayout.VERTICAL);scheduleScroll.addView(scheduleContent,new ScrollView.LayoutParams(-1,-2));
+        schedule.addView(scheduleScroll,new LinearLayout.LayoutParams(-1,0,1));
         boolean showMultiDay=prefs.getBoolean("showMultiDaySchedule",true);
         if(showMultiDay){
-            scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);schedule.addView(scheduleDayScroll,dayLp);
+            scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);scheduleContent.addView(scheduleDayScroll,dayLp);
             selectedScheduleIndex=15;String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
-            scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);schedule.addView(scheduleTimeline,timelineLp);schedule.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
+            scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
             scheduleTimeline.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();}else if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));}return true;}});
         }else{
             scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
-            scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);
+            scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);scheduleContent.addView(scheduleValue);
         }
         return schedule;
     }
