@@ -357,64 +357,138 @@ public class MainActivity extends AppCompatActivity {
     }
     private void openWeather(){
         buildWeatherPage();
-        if(!prefs.getBoolean("weather_ready",false))requestWeatherLocation();
-        else if(System.currentTimeMillis()-prefs.getLong("weather_updated_ms",0)>30*60*1000L)fetchCmaWeather(prefs.getString("weather_station",""));
+        refreshWeatherLocation();
     }
     private void buildWeatherPage(){
         weatherPage=new LinearLayout(this);weatherPage.setOrientation(LinearLayout.VERTICAL);weatherPage.setBackground(pageBackground());
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(12),dp(8),dp(12),dp(8));
         Button back=navButton("‹ 返回",true);back.setOnClickListener(v->buildHome());bar.addView(back);
         TextView title=title("天气",19);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(52),1));
-        Button refresh=navButton("刷新",false);refresh.setOnClickListener(v->{if(prefs.getBoolean("weather_ready",false))fetchCmaWeather(prefs.getString("weather_station",""));else requestWeatherLocation();});bar.addView(refresh);weatherPage.addView(bar);
+        Button refresh=navButton("刷新",false);refresh.setOnClickListener(v->refreshWeatherLocation());bar.addView(refresh);weatherPage.addView(bar);
         ScrollView scroll=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(8),dp(18),dp(28));scroll.addView(body);weatherPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));applySystemBarInsets(weatherPage);setContentView(weatherPage);
         if(weatherData==null){String cache=prefs.getString("weather_cache","");if(!cache.isEmpty())try{weatherData=new JSONObject(cache);}catch(Exception ignored){}}
         renderWeatherPage();
     }
+    private void refreshWeatherLocation(){
+        if(weatherPage!=null)renderWeatherPage();
+        boolean fine=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+        boolean coarse=checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED;
+        if(!fine&&!coarse){
+            if(!prefs.getBoolean("weather_location_permission_asked",false)){
+                prefs.edit().putBoolean("weather_location_permission_asked",true).apply();
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},REQ_WEATHER_LOCATION);
+            }else requestWeatherLocation();
+            return;
+        }
+        requestGpsWeatherLocation();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==REQ_WEATHER_LOCATION){
+            boolean granted=false;for(int result:grantResults)if(result==PackageManager.PERMISSION_GRANTED)granted=true;
+            if(granted)requestGpsWeatherLocation();else requestWeatherLocation();
+        }
+    }
+    @SuppressLint("MissingPermission")
+    private void requestGpsWeatherLocation(){
+        try{
+            locationManager=(LocationManager)getSystemService(LOCATION_SERVICE);
+            if(locationManager==null)throw new Exception("定位服务不可用");
+            Location last=null;
+            try{last=locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);}catch(Exception ignored){}
+            if(last==null)try{last=locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);}catch(Exception ignored){}
+            if(last!=null&&System.currentTimeMillis()-last.getTime()<10*60*1000L){resolveCmaStation(last);return;}
+            Toast.makeText(this,"正在获取 GPS 定位…",Toast.LENGTH_SHORT).show();
+            if(weatherLocationListener!=null)try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
+            weatherLocationListener=new LocationListener(){
+                @Override public void onLocationChanged(Location location){
+                    if(locationManager!=null&&weatherLocationListener!=null)try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
+                    weatherLocationListener=null;
+                    resolveCmaStation(location);
+                }
+                @Override public void onProviderDisabled(String provider){}
+                @Override public void onProviderEnabled(String provider){}
+                @Override public void onStatusChanged(String provider,int status,android.os.Bundle extras){}
+            };
+            boolean requested=false;
+            if(locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);requested=true;}
+            if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0,weatherLocationListener);requested=true;}
+            if(!requested)throw new Exception("GPS 和网络定位均未开启");
+            new android.os.Handler(getMainLooper()).postDelayed(()->{
+                if(weatherLocationListener!=null){
+                    try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
+                    weatherLocationListener=null;
+                    diagnostic("天气","GPS 定位","超时","切换到 IP 定位");
+                    requestWeatherLocation();
+                }
+            },12000);
+        }catch(Exception e){
+            diagnostic("天气","GPS 定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
+            requestWeatherLocation();
+        }
+    }
     private void requestWeatherLocation(){
-        Toast.makeText(this,"正在根据网络 IP 判断所在城市…",Toast.LENGTH_SHORT).show();
+        Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
         new Thread(()->{try{
             JSONObject geo=new JSONObject(weatherHttpGet("https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh"));
             if(!geo.optBoolean("success",false))throw new Exception(geo.optString("message","IP 定位服务暂不可用"));
             String countryCode=geo.optString("country_code"),region=geo.optString("region"),city=geo.optString("city");
-            if(!"CN".equalsIgnoreCase(countryCode))throw new Exception("当前网络 IP 定位到"+geo.optString("country","境外地区")+" "+city+"。目前天气数据源仅支持中国大陆中央气象台站点，暂时无法匹配该地区。");
+            if(!"CN".equalsIgnoreCase(countryCode))throw new Exception("当前 IP 定位到"+geo.optString("country","境外地区")+" "+city+"，天气数据源暂不支持该地区");
             if(region.isEmpty()||city.isEmpty())throw new Exception("IP 定位未能识别到具体省份或城市");
             resolveCmaStationByName(region,city);
         }catch(Exception e){
             diagnostic("天气","IP 城市定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
-            runOnUiThread(()->new AlertDialog.Builder(this).setTitle("无法识别所在城市").setMessage(e.getMessage()+"。请检查网络后重试。").setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show());
+            runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));
         }}).start();
+    }
+    private void useDefaultBeijingWeather(String message){
+        Toast.makeText(this,message,Toast.LENGTH_LONG).show();
+        new Thread(()->{try{
+            JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String code="";
+            for(int i=0;i<provinces.length();i++){JSONObject p=provinces.getJSONObject(i);if(p.optString("name").contains("北京")){code=p.optString("code");break;}}
+            if(code.isEmpty())throw new Exception("未找到北京气象站列表");
+            JSONArray stations=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+code));String id="";
+            for(int i=0;i<stations.length();i++){JSONObject s=stations.getJSONObject(i);if("北京".equals(s.optString("city"))){id=s.optString("code");break;}}
+            if(id.isEmpty()&&stations.length()>0)id=stations.getJSONObject(0).optString("code");
+            if(id.isEmpty())throw new Exception("未找到北京气象站编号");
+            prefs.edit().putString("weather_station",id).putString("weather_city","北京").putBoolean("weather_ready",true).putBoolean("weather_default_beijing",true).apply();
+            runOnUiThread(()->fetchCmaWeather(id));
+        }catch(Exception e){diagnostic("天气","北京默认站点","失败",e.getMessage());runOnUiThread(()->Toast.makeText(this,"北京天气也暂时无法获取，请检查网络",Toast.LENGTH_LONG).show());}}).start();
     }
     private void resolveCmaStationByName(String province,String city){
         new Thread(()->{try{
             JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String provinceCode="";
             String normalizedProvince=province.replace("省","").replace("市","").replace("壮族自治区","").replace("回族自治区","").replace("维吾尔自治区","");
             for(int i=0;i<provinces.length();i++){JSONObject item=provinces.getJSONObject(i);String name=item.optString("name");String normalizedName=name.replace("省","").replace("市","").replace("壮族自治区","").replace("回族自治区","").replace("维吾尔自治区","");if(normalizedName.equals(normalizedProvince)||normalizedName.contains(normalizedProvince)||normalizedProvince.contains(normalizedName)){provinceCode=item.optString("code");break;}}
-            if(provinceCode.isEmpty())throw new Exception("IP 定位到"+province+"，但中央气象台站点列表中没有匹配的省份");
+            if(provinceCode.isEmpty())throw new Exception("中央气象台站点列表中没有匹配的省份："+province);
             JSONArray cities=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+provinceCode));JSONObject station=null;String target=city.replace("市","");
             for(int i=0;i<cities.length();i++){JSONObject item=cities.getJSONObject(i);String name=item.optString("city");if(name.equals(city)||name.equals(target)||name.contains(target)||target.contains(name)){station=item;break;}}
-            if(station==null)throw new Exception("IP 定位到"+city+"，但未找到对应的中央气象台观测站");
+            if(station==null)throw new Exception("未找到对应的中央气象台观测站："+city);
             String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");if(id.isEmpty())throw new Exception("气象站编号为空");
-            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).apply();
+            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
             runOnUiThread(()->{diagnostic("天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){diagnostic("天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->new AlertDialog.Builder(this).setTitle("天气城市匹配失败").setMessage(e.getMessage()).setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show());}}).start();
+        }catch(Exception e){diagnostic("天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));}}).start();
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
             Geocoder geocoder=new Geocoder(this,Locale.CHINA);List<Address> list=geocoder.getFromLocation(location.getLatitude(),location.getLongitude(),1);
-            if(list==null||list.isEmpty())throw new Exception("无法识别所在城市");Address address=list.get(0);
-            String province=address.getAdminArea(),city=address.getLocality();if(city==null||city.isEmpty())city=address.getSubAdminArea();
-            if(province==null||city==null)throw new Exception("定位结果缺少省市信息");
-            JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String provinceCode="";
-            for(int i=0;i<provinces.length();i++){JSONObject p=provinces.getJSONObject(i);String n=p.optString("name");if(n.contains(province.replace("省","").replace("市",""))||province.contains(n.replace("省","").replace("市",""))){provinceCode=p.optString("code");break;}}
+            if(list==null||list.isEmpty())throw new Exception("GPS 坐标无法解析为行政区");
+            Address address=list.get(0);String province=address.getAdminArea(),city=address.getLocality();
+            if(city==null||city.isEmpty())city=address.getSubAdminArea();
+            String district=address.getSubLocality();
+            if(province==null||province.isEmpty()||city==null||city.isEmpty())throw new Exception("GPS 定位结果缺少省市信息");
+            String provinceCode="";JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));
+            String pn=province.replace("省","").replace("市","");
+            for(int i=0;i<provinces.length();i++){String n=provinces.getJSONObject(i).optString("name").replace("省","").replace("市","");if(n.equals(pn)||n.contains(pn)||pn.contains(n)){provinceCode=provinces.getJSONObject(i).optString("code");break;}}
             if(provinceCode.isEmpty())throw new Exception("中央气象台暂未匹配到省份："+province);
-            JSONArray cities=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+provinceCode));JSONObject station=null;String target=city.replace("市","");
-            for(int i=0;i<cities.length();i++){JSONObject item=cities.getJSONObject(i);String n=item.optString("city");if(n.equals(city)||n.equals(target)||city.contains(n)){station=item;break;}}
-            if(station==null)throw new Exception("未找到对应的中央气象台气象站");
-            String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");
-            if(id.isEmpty())throw new Exception("气象站编号为空");
-            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).apply();
-            runOnUiThread(()->{diagnostic("天气","定位与气象站匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){diagnostic("天气","定位与气象站匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->new AlertDialog.Builder(this).setTitle("天气定位失败").setMessage(e.getMessage()+"。请检查网络后重试。").setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show());}}).start();
+            JSONArray stations=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+provinceCode));JSONObject station=null;
+            if(district!=null&&!district.isEmpty())for(int i=0;i<stations.length();i++){JSONObject s=stations.getJSONObject(i);String n=s.optString("city");if(n.equals(district)||n.contains(district)||district.contains(n)){station=s;break;}}
+            if(station==null){String target=city.replace("市","");for(int i=0;i<stations.length();i++){JSONObject s=stations.getJSONObject(i);String n=s.optString("city");if(n.equals(city)||n.equals(target)||n.contains(target)||target.contains(n)){station=s;break;}}}
+            if(station==null)throw new Exception("未找到所在区县或城市的中央气象台站点");
+            String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");if(id.isEmpty())throw new Exception("气象站编号为空");
+            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
+            runOnUiThread(()->{diagnostic("天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
+        }catch(Exception e){diagnostic("天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
     }
     private String weatherHttpGet(String address)throws Exception{
         HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();connection.setRequestMethod("GET");connection.setConnectTimeout(10000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent","Mozilla/5.0 ECJTUEE Android");connection.setRequestProperty("Accept","application/json");
