@@ -15,7 +15,7 @@ final class CourseScheduleParser {
         ArrayList<String> block = new ArrayList<>();
         Pattern slotPattern = Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)(?:\\t| {2,})(.*)$");
         Pattern weekPattern = Pattern.compile("^\\d+(?:-\\d+)?(?:\\s*,\\s*\\d+(?:-\\d+)?)*(?:\\s*[（(](?:单|双)[）)])?\\s+[\\d,]+$");
-        for (String rawLine : rawDay.replace("\\r", "").split("\\n")) {
+        for (String rawLine : rawDay.split("\\r?\\n")) {
             String line = rawLine.trim().replaceFirst("^[•·]\\s*", "");
             if (line.isEmpty()) continue;
             Matcher slot = slotPattern.matcher(line);
@@ -40,7 +40,7 @@ final class CourseScheduleParser {
     private static void append(ArrayList<String> entries, String slot, ArrayList<String> block, String weekLine) {
         if (block.isEmpty()) return;
         StringBuilder item = new StringBuilder();
-        if (slot != null && !slot.isEmpty()) item.append(slot).append(" ");
+        if (slot != null && !slot.isEmpty()) item.append(slot);
         for (String part : block) {
             if (item.length() > 0) item.append(" ");
             item.append(part.trim());
