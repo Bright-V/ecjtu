@@ -56,7 +56,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetContainer,widgetEditBar; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -184,16 +184,72 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this).setTitle("添加小组件").setItems(labels.toArray(new String[0]),(d,w)->{order.add(missing.get(w));saveWidgetOrder(order);renderDashboardWidgets();setWidgetEditing(true);}).setNegativeButton("取消",null).show();
     }
     private void renderDashboardWidgets(){
-        if(widgetContainer==null)return;widgetContainer.removeAllViews();ArrayList<String> order=getWidgetOrder();
-        for(int i=0;i<order.size();i++){String id=order.get(i);
-            if(("power".equals(id)||"weather".equals(id))&&i+1<order.size()&&("power".equals(order.get(i+1))||"weather".equals(order.get(i+1)))){
-                LinearLayout pair=new LinearLayout(this);pair.setOrientation(LinearLayout.HORIZONTAL);pair.setGravity(Gravity.CENTER_VERTICAL);addWidgetFrame(pair,id,1);addWidgetFrame(pair,order.get(++i),1);
-                LinearLayout.LayoutParams pp=new LinearLayout.LayoutParams(-1,dp(164));pp.bottomMargin=dp(16);widgetContainer.addView(pair,pp);
-            }else{android.widget.FrameLayout frame=createWidgetFrame(id);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(16);if("power".equals(id)||"weather".equals(id)){lp.width=dp(164);lp.height=dp(164);lp.gravity=Gravity.CENTER_HORIZONTAL;}widgetContainer.addView(frame,lp);}
+        if(widgetContainer==null)return;
+        widgetContainer.removeAllViews();
+        widgetContainer.setColumnCount(3);
+        widgetContainer.setRowCount(GridLayout.UNDEFINED);
+        widgetContainer.setUseDefaultMargins(false);
+        widgetContainer.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+        ArrayList<String> order=getWidgetOrder();
+        int occupied=0;
+        for(String id:order){
+            int span="schedule".equals(id)?2:1;
+            android.widget.FrameLayout frame=createWidgetFrame(id);
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
+                    GridLayout.spec(GridLayout.UNDEFINED,span,1f),
+                    GridLayout.spec(GridLayout.UNDEFINED,1f));
+            lp.width=0;
+            lp.height=dp("schedule".equals(id)?250:164);
+            lp.setMargins(dp(4),dp(4),dp(4),dp(12));
+            frame.setLayoutParams(lp);
+            widgetContainer.addView(frame);
+            occupied+=span;
         }
-        if(order.isEmpty()){TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(28),0,dp(28));widgetContainer.addView(empty);}
+        int emptyCells=(3-(occupied%3))%3;
+        if(widgetEditing){
+            for(int i=0;i<emptyCells;i++)widgetContainer.addView(createWidgetDropTarget(order.size()+i));
+        }
+        if(order.isEmpty()){
+            TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(0,dp(28),0,dp(28));
+            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(0,1f),GridLayout.spec(0,3,1f));
+            lp.width=0;lp.height=dp(100);widgetContainer.addView(empty,lp);
+        }
     }
-    private void addWidgetFrame(LinearLayout parent,String id,float weight){android.widget.FrameLayout frame=createWidgetFrame(id);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(164),weight);lp.leftMargin=dp(4);lp.rightMargin=dp(4);parent.addView(frame,lp);}
+    private View createWidgetDropTarget(int targetIndex){
+        android.widget.FrameLayout target=new android.widget.FrameLayout(this);
+        target.setBackground(bg(Color.argb(38,125,177,235),18));
+        target.setForeground(getDrawable(android.R.drawable.ic_input_add));
+        GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
+                GridLayout.spec(GridLayout.UNDEFINED,1,1f),
+                GridLayout.spec(GridLayout.UNDEFINED,1f));
+        lp.width=0;lp.height=dp(164);lp.setMargins(dp(4),dp(4),dp(4),dp(12));
+        target.setLayoutParams(lp);
+        target.setOnDragListener((v,event)->{
+            if(event.getAction()==android.view.DragEvent.ACTION_DROP){
+                String from=String.valueOf(event.getLocalState());
+                moveWidgetToIndex(from,targetIndex);
+                return true;
+            }
+            return event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED||
+                    event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED||
+                    event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||
+                    event.getAction()==android.view.DragEvent.ACTION_DRAG_LOCATION;
+        });
+        return target;
+    }
+    private void moveWidgetToIndex(String from,int targetIndex){
+        ArrayList<String> current=getWidgetOrder();
+        int fromIndex=current.indexOf(from);
+        if(fromIndex<0)return;
+        String moving=current.remove(fromIndex);
+        int destination=Math.max(0,Math.min(targetIndex,current.size()));
+        current.add(destination,moving);
+        saveWidgetOrder(current);
+        renderDashboardWidgets();
+        setWidgetEditing(true);
+    }
     private android.widget.FrameLayout createWidgetFrame(String id){
         View content;
         if("schedule".equals(id))content=createScheduleWidget();
@@ -208,7 +264,7 @@ public class MainActivity extends AppCompatActivity {
         TextView remove=title("×",20);remove.setTag("widget_remove");remove.setGravity(Gravity.CENTER);remove.setBackground(bg(Color.argb(230,205,69,79),18));
         android.widget.FrameLayout.LayoutParams rp=new android.widget.FrameLayout.LayoutParams(dp(34),dp(34),Gravity.RIGHT|Gravity.TOP);rp.setMargins(0,dp(6),dp(6),0);frame.addView(remove,rp);
         remove.setOnClickListener(v->{ArrayList<String> current=getWidgetOrder();current.remove(id);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);});remove.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
-        frame.setOnDragListener((v,event)->{if(event.getAction()==android.view.DragEvent.ACTION_DROP){String from=String.valueOf(event.getLocalState()),to=String.valueOf(v.getTag());ArrayList<String> current=getWidgetOrder();int fi=current.indexOf(from),ti=current.indexOf(to);if(fi>=0&&ti>=0&&fi!=ti){current.remove(fi);current.add(ti,from);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);}return true;}return true;});return frame;
+        frame.setOnDragListener((v,event)->{if(event.getAction()==android.view.DragEvent.ACTION_DROP){String from=String.valueOf(event.getLocalState()),to=String.valueOf(v.getTag());if(!from.equals(to))moveWidgetToIndex(from,getWidgetOrder().indexOf(to));return true;}return event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED||event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED||event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||event.getAction()==android.view.DragEvent.ACTION_DRAG_LOCATION;});return frame;
     }
     private LinearLayout createAccountWidget(String label,String value,String hint,String url){
         LinearLayout c=card();c.setMinimumHeight(dp(132));c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);if(label.contains("宿舍"))powerValue=val;else if(label.contains("校园卡"))cardValue=val;else if(label.contains("本月"))spendValue=val;c.addView(t(hint,13,Color.rgb(85,157,255)));return c;
