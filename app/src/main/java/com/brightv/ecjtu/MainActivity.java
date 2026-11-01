@@ -219,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.FrameLayout target=new android.widget.FrameLayout(this);
         target.setTag("widget_drop_target");target.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
         target.setBackground(bg(Color.argb(38,125,177,235),18));
-        target.setForeground(getDrawable(android.R.drawable.ic_input_add));
+        TextView plus=t("＋",28,MUTED);plus.setGravity(Gravity.CENTER);target.addView(plus,new android.widget.FrameLayout.LayoutParams(-1,-1));
         GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
                 GridLayout.spec(GridLayout.UNDEFINED,1,1f),
                 GridLayout.spec(GridLayout.UNDEFINED,1f));
