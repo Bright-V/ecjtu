@@ -62,45 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
 
-    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),false);getWindow().setStatusBarColor(Color.TRANSPARENT);getWindow().setNavigationBarColor(Color.TRANSPARENT);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightStatusBars(false);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightNavigationBars(false);CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);cleanupDiagnosticLogs();if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
-    private static final long DIAGNOSTIC_RETENTION_MS=15L*60L*1000L;
-    private String pruneDiagnosticEvents(String raw,long now){
-        if(raw==null||raw.isEmpty())return "";
-        StringBuilder kept=new StringBuilder();
-        SimpleDateFormat format=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US);
-        for(String row:raw.split("\\n")){
-            if(row.trim().isEmpty())continue;
-            try{
-                int bracket=row.indexOf(" [");
-                String timestamp=bracket>0?row.substring(0,bracket):row.substring(0,Math.min(23,row.length()));
-                long time=format.parse(timestamp).getTime();
-                if(now-time>=0&&now-time<=DIAGNOSTIC_RETENTION_MS)kept.append(row).append("\n");
-            }catch(Exception ignored){}
-        }
-        return kept.toString();
-    }
-    private void cleanupDiagnosticLogs(){
-        try{String kept=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());prefs.edit().putString("diag_events",kept).apply();}catch(Exception ignored){}
-    }
-    private void diagnostic(String module,String stage,String status,String detail){
-        try{
-            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
-            safe=safe.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
-            long now=System.currentTimeMillis();
-            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date(now))+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\r"," ").replace("\n","\\n");
-            String old=pruneDiagnosticEvents(prefs.getString("diag_events",""),now);
-            StringBuilder all=new StringBuilder(old);all.append(line).append("\n");
-            prefs.edit().putString("diag_events",all.toString()).apply();
-        }catch(Exception ignored){}
-    }
-    private String diagnosticText(String raw,int max){
-        if(raw==null)return "";
-        String value=raw.replace("\r","");
-        value=value.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
-        value=value.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
-        if(value.length()>max)value=value.substring(0,max)+"\n…（内容已截断）";
-        return value;
-    }
+    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),false);getWindow().setStatusBarColor(Color.TRANSPARENT);getWindow().setNavigationBarColor(Color.TRANSPARENT);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightStatusBars(false);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightNavigationBars(false);CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);DiagnosticLogger.cleanupDiagnosticLogs(prefs);if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     // Glassmorphism built from translucent gradients and fine highlights; avoids API-specific backdrop blur.
@@ -438,7 +400,7 @@ public class MainActivity extends AppCompatActivity {
                 if(weatherLocationListener!=null){
                     try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
                     weatherLocationListener=null;
-                    diagnostic("天气","GPS 定位","超时","切换到 IP 定位");
+                    DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","超时","切换到 IP 定位");
                     requestWeatherLocation();
                 }
             },12000);
@@ -511,13 +473,6 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(()->{diagnostic("天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
         }catch(Exception e){diagnostic("天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
     }
-    private String diagnosticPayload(String raw,int max){
-        if(raw==null)return "";
-        String value=raw.replace("\r","");
-        value=value.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
-        if(value.length()>max)value=value.substring(0,max)+"\n…（原始响应过长，已截断）";
-        return value;
-    }
     private String weatherHttpGet(String address)throws Exception{
         HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();connection.setRequestMethod("GET");connection.setConnectTimeout(10000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent","Mozilla/5.0 ECJTUEE Android");connection.setRequestProperty("Accept","application/json");
         prefs.edit().remove("diag_weather_raw").putString("diag_weather_http","请求中").putString("diag_weather_at",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).apply();
@@ -527,7 +482,7 @@ public class MainActivity extends AppCompatActivity {
             StringBuilder out=new StringBuilder();
             if(stream!=null){BufferedReader reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8));String line;while((line=reader.readLine())!=null)out.append(line);reader.close();}
             String raw=out.toString();
-            String saved=diagnosticPayload(raw,30000);
+            String saved=DiagnosticLogger.diagnosticPayload(raw,30000);
             prefs.edit().putString("diag_weather_raw",saved.isEmpty()?"（接口未返回响应正文）":saved).putString("diag_weather_http",String.valueOf(status)).putString("diag_weather_at",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).apply();
             diagnostic("天气","中央气象台原始响应",status>=200&&status<300?"已保存":"HTTP异常","HTTP状态码="+status+"；响应长度="+raw.length()+"；已保存到导出日志");
             if(status<200||status>=300)throw new Exception("中央气象台 HTTP "+status);
@@ -707,7 +662,7 @@ public class MainActivity extends AppCompatActivity {
                 conn=(java.net.HttpURLConnection)url.openConnection();conn.setConnectTimeout(5000);conn.setReadTimeout(5000);conn.setRequestMethod("GET");conn.setRequestProperty("Accept","application/json");
                 int http=conn.getResponseCode();diagnostic("每日一言","HTTP请求",http==200?"成功":"失败","HTTP状态码="+http);if(http!=200)throw new java.io.IOException("HTTP "+http);
                 java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
-                String rawText=raw.toString();prefs.edit().putString("diag_hitokoto_raw",diagnosticText(rawText,1800)).apply();diagnostic("每日一言","原始响应","已获取",diagnosticText(rawText,1800));org.json.JSONObject o=new org.json.JSONObject(rawText);String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
+                String rawText=raw.toString();prefs.edit().putString("diag_hitokoto_raw",DiagnosticLogger.diagnosticText(rawText,1800)).apply();diagnostic("每日一言","原始响应","已获取",diagnosticText(rawText,1800));org.json.JSONObject o=new org.json.JSONObject(rawText);String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
                 if("null".equalsIgnoreCase(from))from="";if("null".equalsIgnoreCase(who))who="";if(quote.isEmpty())return;
                 String source="";if(!who.isEmpty()&&!from.isEmpty())source="—— "+who+" · "+from;else if(!who.isEmpty())source="—— "+who;else if(!from.isEmpty())source="—— "+from;
                 prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();diagnostic("每日一言","JSON解析与缓存","成功","句子长度="+quote.length()+"；来源="+source);
@@ -840,7 +795,7 @@ public class MainActivity extends AppCompatActivity {
             if(packed.isEmpty())log.append("暂无缓存。\n");
             else{String[] cached=packed.split(String.valueOf((char)30),-1);for(int i=0;i<cached.length;i++){Calendar d=(Calendar)Calendar.getInstance().clone();d.add(Calendar.DAY_OF_MONTH,i-15);log.append(new SimpleDateFormat("yyyy-MM-dd EEE",Locale.CHINA).format(d.getTime())).append(": ").append(cached[i].replace("\n"," | ")).append("\n");}}
             log.append("\n========== D. 全应用操作事件（最近15分钟） ==========\n");
-            String events=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
+            String events=DiagnosticLogger.pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
             log.append("\n========== E. 中央气象台天气接口原始 JSON 响应 ==========\n");
             log.append("HTTP状态码: ").append(prefs.getString("diag_weather_http","暂无")).append("\n");
