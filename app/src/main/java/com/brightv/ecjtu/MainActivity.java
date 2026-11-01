@@ -159,6 +159,33 @@ public class MainActivity extends AppCompatActivity {
         if(count==0){TextView empty=t("当天没有安排课程",15,MUTED);empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(26),0,dp(26));scheduleTimeline.addView(empty);}
     }
 private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
+    private String[] splitCourseEntries(String rawDay){
+        String[] lines=rawDay.split("\\n");
+        ArrayList<String> entries=new ArrayList<>();
+        StringBuilder course=new StringBuilder();
+        boolean foundWeekLine=false;
+        for(String rawLine:lines){
+            String line=rawLine.trim().replaceFirst("^[•·]\\s*","");
+            if(line.isEmpty())continue;
+            boolean weekLine=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s+[\\d,]+$").matcher(line).matches();
+            if(weekLine){
+                foundWeekLine=true;
+                if(course.length()>0){entries.add(course.toString().trim()+" "+line);course.setLength(0);}
+                else entries.add(line);
+            }else{
+                if(course.length()>0)course.append(" ");
+                course.append(line);
+            }
+        }
+        if(course.length()>0){
+            if(foundWeekLine)entries.add(course.toString().trim());
+            else{
+                for(String line:lines){line=line.trim();if(!line.isEmpty())entries.add(line);}
+            }
+        }
+        return entries.toArray(new String[0]);
+    }
+
     private boolean courseOccursInWeek(String line,int weekNo){
         if(weekNo<=0)return true;
         java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\s)(\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*)\\s+[\\d,]+$").matcher(line.trim());
@@ -339,7 +366,7 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
                 if(finished[0])return;
                 new android.os.Handler().postDelayed(()->{
                     if(finished[0])return;
-                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
+                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\r/g,'').replace(/[ \\t]+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
@@ -401,7 +428,7 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
         boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
         if(!jw&&!bill&&!card)return;
         String js;
-        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\s+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
+        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\r/g,'').replace(/[ \\t]+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
@@ -420,8 +447,8 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
                         if(!weekdayCourses[i].isEmpty()){
                             String rawDay=weekdayCourses[i].replace("\\r","").replace("\\\\n","\n").replace("\\n","\n");
                             rawDay=rawDay.replaceAll("(?<!^)\\s+(?=(?:1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\s)","\\n");
-                            String[] lines=rawDay.split("\\n");StringBuilder nice=new StringBuilder();
-                            for(String line:lines){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}
+                            String[] entries=splitCourseEntries(rawDay);StringBuilder nice=new StringBuilder();
+                            for(String line:entries){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}
                             weekdayCourses[i]=nice.toString();
                         }
                     }
