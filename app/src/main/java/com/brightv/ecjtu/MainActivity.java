@@ -167,7 +167,7 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
         for(String rawLine:lines){
             String line=rawLine.trim().replaceFirst("^[•·]\\s*","");
             if(line.isEmpty())continue;
-            boolean weekLine=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s+[\\d,]+$").matcher(line).matches();
+            boolean weekLine=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s*[（(]?(?:单|雙|双)?[）)]?\\s+[\\d,]+$").matcher(line).matches();
             if(weekLine){
                 foundWeekLine=true;
                 if(course.length()>0){entries.add(course.toString().trim()+" "+line);course.setLength(0);}
@@ -188,13 +188,24 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
 
     private boolean courseOccursInWeek(String line,int weekNo){
         if(weekNo<=0)return true;
-        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\s)(\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*)\\s+[\\d,]+$").matcher(line.trim());
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\\\s)([0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)*)*)\\\\s*[（(]?(单|双)?[）)]?\\\\s+[0-9,]+$").matcher(line.trim());
         if(!m.find())return true;
+        String parity=m.group(2);
         String[] ranges=m.group(1).split(",");
-        for(String part:ranges){try{String[] ends=part.split("-");int first=Integer.parseInt(ends[0]);int last=ends.length>1?Integer.parseInt(ends[1]):first;if(weekNo>=first&&weekNo<=last)return true;}catch(Exception ignored){}}
+        for(String part:ranges){
+            try{
+                String[] ends=part.split("-");
+                int first=Integer.parseInt(ends[0]);
+                int last=ends.length>1?Integer.parseInt(ends[1]):first;
+                if(weekNo<first||weekNo>last)continue;
+                if("单".equals(parity)&&weekNo%2==0)continue;
+                if("双".equals(parity)&&weekNo%2!=0)continue;
+                return true;
+            }catch(Exception ignored){}
+        }
         return false;
     }
-    private int getSchoolWeek(Calendar today){
+        private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
         if(start.length()==0)return 0;
         try{
