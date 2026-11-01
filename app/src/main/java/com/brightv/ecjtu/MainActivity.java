@@ -136,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
     private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
     private boolean courseOccursInWeek(String line,int weekNo){
         if(weekNo<=0)return true;
-        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\\\s)(\\\\d+(?:-\\\\d+)?(?:,\\\\d+(?:-\\\\d+)?)*)\\\\s+[\\\\d,]+$").matcher(line.trim());
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\s)(\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*)\\s+[\\d,]+$").matcher(line.trim());
         if(!m.find())return true;
         String[] ranges=m.group(1).split(",");
         for(String part:ranges){try{String[] ends=part.split("-");int first=Integer.parseInt(ends[0]);int last=ends.length>1?Integer.parseInt(ends[1]):first;if(weekNo>=first&&weekNo<=last)return true;}catch(Exception ignored){}}
@@ -412,7 +412,7 @@ public class MainActivity extends AppCompatActivity {
             if(spend.length()>0){saveValue("spend",spend);if(spendValue!=null)spendValue.setText(spend);}
         }
     }
-    private String extractNumber(String s,String[] keys){for(String k:keys){int p=s.indexOf(k);if(p>=0){String tail=s.substring(p,Math.min(s.length(),p+80));java.util.regex.Matcher m=java.util.regex.Pattern.compile("[-+]?\\d+(?:\\.\\d+)?").matcher(tail);if(m.find())return m.group();}}return "";}
+    private String extractNumber(String s,String[] keys){for(String k:keys){int p=s.indexOf(k);if(p>=0){String tail=s.substring(p,Math.min(s.length(),p+80));java.util.regex.Matcher m=java.util.regex.Pattern.compile("[-+]?\d+(?:\.\d+)?").matcher(tail);if(m.find())return m.group();}}return "";}
     private void saveValue(String key,String value){if(value!=null&&!value.trim().isEmpty())prefs.edit().putString(key,value.trim()).apply();}
     @Override protected void onDestroy(){if(webView!=null){webView.stopLoading();webView.destroy();}super.onDestroy();}
 }
