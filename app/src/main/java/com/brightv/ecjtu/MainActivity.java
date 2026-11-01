@@ -372,8 +372,7 @@ public class MainActivity extends AppCompatActivity {
         weatherWidgetCity=t(prefs.getString("weather_city","首次点击获取定位天气"),13,MUTED);row.addView(weatherWidgetCity);c.addView(row);
         LinearLayout data=new LinearLayout(this);data.setGravity(Gravity.CENTER_VERTICAL);
         weatherWidgetInfo=title(prefs.getString("weather_brief","点击查看天气详情"),24);weatherWidgetInfo.setPadding(dp(4),dp(12),dp(4),0);data.addView(weatherWidgetInfo,new LinearLayout.LayoutParams(0,-2,1));
-        data.addView(t("详情  ›",13,BLUE));c.addView(data);
-        c.addView(t("中央气象台 · 查看详情",13,Color.rgb(85,157,255)));return c;
+        c.addView(data);return c;
     }
     private void openWeather(){
         buildWeatherPage();
