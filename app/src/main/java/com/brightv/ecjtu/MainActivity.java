@@ -548,14 +548,15 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
         ScrollView scheduleScroll=new ScrollView(this);scheduleWidgetScroll=scheduleScroll;scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        final float[] scheduleTouchStartY={0f};
         scheduleScroll.setOnTouchListener((v,event)->{
             if(homeRefresh==null)return false;
             int action=event.getActionMasked();
             if(action==android.view.MotionEvent.ACTION_DOWN){
-                scheduleTouchStartY=event.getY();
+                scheduleTouchStartY[0]=event.getY();
                 homeRefresh.requestDisallowInterceptTouchEvent(false);
             }else if(action==android.view.MotionEvent.ACTION_MOVE){
-                float deltaY=event.getY()-scheduleTouchStartY;
+                float deltaY=event.getY()-scheduleTouchStartY[0];
                 int touchSlop=android.view.ViewConfiguration.get(this).getScaledTouchSlop();
                 if(Math.abs(deltaY)>touchSlop){
                     // Let the course list consume upward gestures and downward gestures
