@@ -61,18 +61,34 @@ public class MainActivity extends AppCompatActivity {
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
 
-    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),true);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(Color.rgb(18,39,66));CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
+    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),true);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(Color.rgb(18,39,66));CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);cleanupDiagnosticLogs();if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
+    private static final long DIAGNOSTIC_RETENTION_MS=15L*60L*1000L;
+    private String pruneDiagnosticEvents(String raw,long now){
+        if(raw==null||raw.isEmpty())return "";
+        StringBuilder kept=new StringBuilder();
+        SimpleDateFormat format=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US);
+        for(String row:raw.split("\\n")){
+            if(row.trim().isEmpty())continue;
+            try{
+                int bracket=row.indexOf(" [");
+                String timestamp=bracket>0?row.substring(0,bracket):row.substring(0,Math.min(23,row.length()));
+                long time=format.parse(timestamp).getTime();
+                if(now-time>=0&&now-time<=DIAGNOSTIC_RETENTION_MS)kept.append(row).append("\\n");
+            }catch(Exception ignored){}
+        }
+        return kept.toString();
+    }
+    private void cleanupDiagnosticLogs(){
+        try{String kept=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());prefs.edit().putString("diag_events",kept).apply();}catch(Exception ignored){}
+    }
     private void diagnostic(String module,String stage,String status,String detail){
         try{
-            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
-            safe=safe.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
-            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date())+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\r"," ").replace("\n","\\n");
-            String old=prefs.getString("diag_events","");
-            String[] rows=old.isEmpty()?new String[0]:old.split("\n");
-            StringBuilder all=new StringBuilder();
-            int start=Math.max(0,rows.length-119);
-            for(int i=start;i<rows.length;i++)all.append(rows[i]).append("\n");
-            all.append(line).append("\n");
+            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\\\s*[:=：]\\\\s*)[^\\\\s,;]+","$1$2[已脱敏]");
+            safe=safe.replaceAll("\\\\b\\\\d{10,}\\\\b","[长数字已脱敏]");
+            long now=System.currentTimeMillis();
+            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date(now))+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\\r"," ").replace("\\n","\\\\n");
+            String old=pruneDiagnosticEvents(prefs.getString("diag_events",""),now);
+            StringBuilder all=new StringBuilder(old);all.append(line).append("\\n");
             prefs.edit().putString("diag_events",all.toString()).apply();
         }catch(Exception ignored){}
     }
@@ -548,6 +564,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void exportLogs(){
         try{
+            cleanupDiagnosticLogs();
             File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);if(!dir.exists())dir.mkdirs();
             String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());File out=new File(dir,"ECJTUEE_Diagnostic_"+stamp+".txt");
             StringBuilder log=new StringBuilder();
@@ -570,8 +587,8 @@ public class MainActivity extends AppCompatActivity {
             String packed=prefs.getString("scheduleDays","");
             if(packed.isEmpty())log.append("暂无缓存。\n");
             else{String[] cached=packed.split(String.valueOf((char)30),-1);for(int i=0;i<cached.length;i++){Calendar d=(Calendar)Calendar.getInstance().clone();d.add(Calendar.DAY_OF_MONTH,i-15);log.append(new SimpleDateFormat("yyyy-MM-dd EEE",Locale.CHINA).format(d.getTime())).append(": ").append(cached[i].replace("\n"," | ")).append("\n");}}
-            log.append("\n========== D. 全应用操作事件（最近120条） ==========\n");
-            String events=prefs.getString("diag_events","");
+            log.append("\n========== D. 全应用操作事件（最近15分钟） ==========\n");
+            String events=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
             log.append("\n========== E. 其他服务最近原始响应摘要 ==========\n");
             for(String key:new String[]{"diag_power_raw","diag_card_raw","diag_hitokoto_raw","diag_auth_status","diag_power_result","diag_card_result"}) log.append(key).append(": ").append(prefs.getString(key,"暂无")).append("\n");
