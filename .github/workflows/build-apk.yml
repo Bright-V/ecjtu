@@ -37,7 +37,7 @@ jobs:
         env:
           ECJTU_KEYSTORE_PASSWORD: ${{ secrets.ECJTU_KEYSTORE_PASSWORD }}
           ECJTU_KEY_PASSWORD: ${{ secrets.ECJTU_KEY_PASSWORD }}
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
       - name: Remove restored signing keystore
         if: always()
