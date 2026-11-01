@@ -168,24 +168,30 @@ public class MainActivity extends AppCompatActivity {
         ArrayList<String> entries=new ArrayList<>();
         StringBuilder course=new StringBuilder();
         boolean foundWeekLine=false;
+        java.util.regex.Pattern slotPattern=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\s*(?:\\t|\\s{2,})(.*)$");
+        java.util.regex.Pattern weekPattern=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s*[（(]?(?:单|雙|双)?[）)]?\\s+[\\d,]+$");
         for(String rawLine:lines){
             String line=rawLine.trim().replaceFirst("^[•·]\\s*","");
             if(line.isEmpty())continue;
-            boolean weekLine=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:,\\d+(?:-\\d+)?)*\\s*[（(]?(?:单|雙|双)?[）)]?\\s+[\\d,]+$").matcher(line).matches();
+            java.util.regex.Matcher slot=slotPattern.matcher(line);
+            if(slot.matches()){
+                if(course.length()>0){entries.add(course.toString().trim());course.setLength(0);}
+                course.append(slot.group(1)).append(" ").append(slot.group(2).trim());
+                continue;
+            }
+            boolean weekLine=weekPattern.matcher(line).matches();
             if(weekLine){
                 foundWeekLine=true;
-                if(course.length()>0){entries.add(course.toString().trim()+" "+line);course.setLength(0);}
+                if(course.length()>0){course.append(" ").append(line);entries.add(course.toString().trim());course.setLength(0);}
                 else entries.add(line);
             }else{
                 if(course.length()>0)course.append(" ");
                 course.append(line);
             }
         }
-        if(course.length()>0){
-            if(foundWeekLine)entries.add(course.toString().trim());
-            else{
-                for(String line:lines){line=line.trim();if(!line.isEmpty())entries.add(line);}
-            }
+        if(course.length()>0)entries.add(course.toString().trim());
+        if(entries.isEmpty()){
+            for(String rawLine:lines){String line=rawLine.trim();if(!line.isEmpty())entries.add(line);}
         }
         return entries.toArray(new String[0]);
     }
@@ -381,7 +387,7 @@ public class MainActivity extends AppCompatActivity {
                 if(finished[0])return;
                 new android.os.Handler().postDelayed(()->{
                     if(finished[0])return;
-                    String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\r/g,'').replace(/[ \\t]+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
+                     String js=type==0?"(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];function blocks(cell){var box=cell;for(var n=0;n<6&&box.children&&box.children.length===1;n++)box=box.children[0];var kids=box.children;if(kids&&kids.length>1){var out=[];for(var k=0;k<kids.length;k++){var tx=(kids[k].innerText||kids[k].textContent||'').replace(/\\r/g,'').trim();if(tx)out.push(tx);}if(out.length>1)return out;}var raw=(cell.innerText||cell.textContent||'').replace(/\\r/g,'').trim();return raw?[raw]:[];}for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';if(!/^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)$/.test(slot))continue;for(var d=1;d<=7;d++){if(c.length<=d)continue;var parts=blocks(c[d]);for(var q=0;q<parts.length;q++){var val=parts[q];if(val&&val!=='-'&&val!=='无')days[d-1].push(slot+'\\t'+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()":type==1?"(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()":"(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()";
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
@@ -443,7 +449,7 @@ public class MainActivity extends AppCompatActivity {
         boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
         if(!jw&&!bill&&!card)return;
         String js;
-        if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';for(var d=1;d<=7;d++){if(c.length<=d)continue;var val=(c[d].innerText||'').trim();if(val&&val!=='-'&&val!=='无'){val=val.replace(/\\r/g,'').replace(/[ \\t]+/g,' ').trim();days[d-1].push((slot?slot+'  ':'')+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
+         if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];function blocks(cell){var box=cell;for(var n=0;n<6&&box.children&&box.children.length===1;n++)box=box.children[0];var kids=box.children;if(kids&&kids.length>1){var out=[];for(var k=0;k<kids.length;k++){var tx=(kids[k].innerText||kids[k].textContent||'').replace(/\\r/g,'').trim();if(tx)out.push(tx);}if(out.length>1)return out;}var raw=(cell.innerText||cell.textContent||'').replace(/\\r/g,'').trim();return raw?[raw]:[];}for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';if(!/^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)$/.test(slot))continue;for(var d=1;d<=7;d++){if(c.length<=d)continue;var parts=blocks(c[d]);for(var q=0;q<parts.length;q++){var val=parts[q];if(val&&val!=='-'&&val!=='无')days[d-1].push(slot+'\\t'+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
@@ -461,7 +467,7 @@ public class MainActivity extends AppCompatActivity {
                         try{weekdayCourses[i]=java.net.URLDecoder.decode(encoded[i],"UTF-8").trim();}catch(Exception ex){weekdayCourses[i]="";}
                         if(!weekdayCourses[i].isEmpty()){
                             String rawDay=weekdayCourses[i].replace("\\r","").replace("\\\\n","\n").replace("\\n","\n");
-                            rawDay=rawDay.replaceAll("(?<!^)\\s+(?=(?:1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\s)","\\n");
+
                             String[] entries=splitCourseEntries(rawDay);StringBuilder nice=new StringBuilder();
                             for(String line:entries){line=line.trim();if(line.isEmpty())continue;if(nice.length()>0)nice.append("\n");nice.append("• ").append(line);}
                             weekdayCourses[i]=nice.toString();
