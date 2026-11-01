@@ -669,7 +669,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
     private String[] splitCourseEntries(String rawDay){return CourseScheduleParser.splitCourseEntries(rawDay);}
-    private void appendCourseEntry(ArrayList<String> entries,String slot,ArrayList<String> block,String weekLine){}
+
     private boolean courseOccursInWeek(String line,int weekNo){return CourseScheduleParser.courseOccursInWeek(line,weekNo);}
     private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
