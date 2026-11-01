@@ -106,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
         // Request after attachment so Android 15+ dispatches the initial insets reliably.
-        root.post(()->ViewCompat.requestApplyWindowInsets(root));
+        root.post(()->root.requestApplyInsets());
     }
 
     private void buildSetup(){
