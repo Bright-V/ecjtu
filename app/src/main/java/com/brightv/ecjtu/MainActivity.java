@@ -182,8 +182,21 @@ public class MainActivity extends AppCompatActivity {
     }
     private void saveWidgetOrder(ArrayList<String> order){prefs.edit().putString("home_widget_order",android.text.TextUtils.join(",",order)).apply();}
     private void setWidgetEditing(boolean editing){
-        widgetEditing=editing;if(widgetEditBar!=null)widgetEditBar.setVisibility(editing?View.VISIBLE:View.GONE);
-        if(widgetContainer!=null)for(int i=0;i<widgetContainer.getChildCount();i++){View v=widgetContainer.getChildAt(i);View remove=v.findViewWithTag("widget_remove");if(remove!=null)remove.setVisibility(editing?View.VISIBLE:View.GONE);if("widget_drop_target".equals(v.getTag()))v.setVisibility(editing?View.VISIBLE:View.GONE);v.setAlpha(editing?0.94f:1f);}
+        boolean changed=widgetEditing!=editing;
+        widgetEditing=editing;
+        if(widgetEditBar!=null)widgetEditBar.setVisibility(editing?View.VISIBLE:View.GONE);
+        if(changed&&widgetContainer!=null){
+            // Rebuild only after the editing state changes so the insertion drop target exists
+            // before a drag starts. The long-press handler then resolves the refreshed source view.
+            renderDashboardWidgets();
+        }
+        if(widgetContainer!=null)for(int i=0;i<widgetContainer.getChildCount();i++){
+            View v=widgetContainer.getChildAt(i);
+            View remove=v.findViewWithTag("widget_remove");
+            if(remove!=null)remove.setVisibility(editing?View.VISIBLE:View.GONE);
+            if("widget_drop_target".equals(v.getTag()))v.setVisibility(editing?View.VISIBLE:View.GONE);
+            v.setAlpha(editing?0.94f:1f);
+        }
     }
     private void showAddWidgetDialog(){
         ArrayList<String> order=getWidgetOrder(),missing=new ArrayList<>(),labels=new ArrayList<>();
@@ -332,7 +345,14 @@ public class MainActivity extends AppCompatActivity {
         else if("card".equals(id))content=createAccountWidget("▣  校园卡余额",prefs.getString("card","未同步"),"消费 / 充值","https://ecard.ecjtu.edu.cn/");
         else content=createAccountWidget("▥  本月支出",prefs.getString("spend","未同步"),"校园卡消费汇总","https://ecard.ecjtu.edu.cn/");
         android.widget.FrameLayout frame=new android.widget.FrameLayout(this);frame.setTag(id);frame.addView(content,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        View.OnLongClickListener longClick=v->{setWidgetEditing(true);android.content.ClipData data=android.content.ClipData.newPlainText("home-widget",id);frame.startDragAndDrop(data,new View.DragShadowBuilder(frame),id,0);return true;};
+        View.OnLongClickListener longClick=v->{
+            setWidgetEditing(true);
+            View source=widgetContainer==null?null:widgetContainer.findViewWithTag(id);
+            if(source==null)source=frame;
+            android.content.ClipData data=android.content.ClipData.newPlainText("home-widget",id);
+            source.startDragAndDrop(data,new View.DragShadowBuilder(source),id,0);
+            return true;
+        };
         frame.setOnLongClickListener(longClick);content.setOnLongClickListener(longClick);
         if("schedule".equals(id))content.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));
         TextView remove=title("×",20);remove.setTag("widget_remove");remove.setGravity(Gravity.CENTER);remove.setBackground(bg(Color.argb(230,205,69,79),18));
