@@ -390,7 +390,7 @@ public class MainActivity extends AppCompatActivity {
                     for(int i=0;i<31;i++){
                         Calendar d=(Calendar)today.clone();d.add(Calendar.DAY_OF_MONTH,i-15);
                         String source=weekdayCourses[dayOfWeekIndex(d)];int weekNo=getSchoolWeek(d);StringBuilder visible=new StringBuilder();
-                        if(!source.isEmpty()){for(String line:source.split("\\n")){line=line.trim();if(line.isEmpty()||!courseOccursInWeek(line,weekNo))continue;if(visible.length()>0)visible.append("\\n");visible.append(line);}}
+                        if(!source.isEmpty()){for(String line:source.split("\\n")){line=line.trim();if(line.isEmpty()||!courseOccursInWeek(line,weekNo))continue;if(visible.length()>0)visible.append("\n");visible.append(line);}}
                         days[i]=visible.length()==0?(i==15?"今日无事":"暂无课程"):visible.toString();
                     }
                     scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
