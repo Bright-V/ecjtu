@@ -73,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
                 int bracket=row.indexOf(" [");
                 String timestamp=bracket>0?row.substring(0,bracket):row.substring(0,Math.min(23,row.length()));
                 long time=format.parse(timestamp).getTime();
-                if(now-time>=0&&now-time<=DIAGNOSTIC_RETENTION_MS)kept.append(row).append("\\n");
+                if(now-time>=0&&now-time<=DIAGNOSTIC_RETENTION_MS)kept.append(row).append("\n");
             }catch(Exception ignored){}
         }
         return kept.toString();
@@ -83,12 +83,12 @@ public class MainActivity extends AppCompatActivity {
     }
     private void diagnostic(String module,String stage,String status,String detail){
         try{
-            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\\\s*[:=：]\\\\s*)[^\\\\s,;]+","$1$2[已脱敏]");
-            safe=safe.replaceAll("\\\\b\\\\d{10,}\\\\b","[长数字已脱敏]");
+            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
+            safe=safe.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
             long now=System.currentTimeMillis();
-            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date(now))+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\\r"," ").replace("\\n","\\\\n");
+            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date(now))+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\r"," ").replace("\n","\\n");
             String old=pruneDiagnosticEvents(prefs.getString("diag_events",""),now);
-            StringBuilder all=new StringBuilder(old);all.append(line).append("\\n");
+            StringBuilder all=new StringBuilder(old);all.append(line).append("\n");
             prefs.edit().putString("diag_events",all.toString()).apply();
         }catch(Exception ignored){}
     }
