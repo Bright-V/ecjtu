@@ -549,10 +549,22 @@ public class MainActivity extends AppCompatActivity {
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
         ScrollView scheduleScroll=new ScrollView(this);scheduleWidgetScroll=scheduleScroll;scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         scheduleScroll.setOnTouchListener((v,event)->{
-            if(homeRefresh!=null){
-                int action=event.getActionMasked();
-                if(action==android.view.MotionEvent.ACTION_DOWN||action==android.view.MotionEvent.ACTION_MOVE)homeRefresh.requestDisallowInterceptTouchEvent(true);
-                else if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL)homeRefresh.requestDisallowInterceptTouchEvent(false);
+            if(homeRefresh==null)return false;
+            int action=event.getActionMasked();
+            if(action==android.view.MotionEvent.ACTION_DOWN){
+                scheduleTouchStartY=event.getY();
+                homeRefresh.requestDisallowInterceptTouchEvent(false);
+            }else if(action==android.view.MotionEvent.ACTION_MOVE){
+                float deltaY=event.getY()-scheduleTouchStartY;
+                int touchSlop=android.view.ViewConfiguration.get(this).getScaledTouchSlop();
+                if(Math.abs(deltaY)>touchSlop){
+                    // Let the course list consume upward gestures and downward gestures
+                    // while it can still scroll; at its top, let SwipeRefreshLayout take over.
+                    boolean keepInside=deltaY<0||v.getScrollY()>0;
+                    homeRefresh.requestDisallowInterceptTouchEvent(keepInside);
+                }
+            }else if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL){
+                homeRefresh.requestDisallowInterceptTouchEvent(false);
             }
             return false;
         });
