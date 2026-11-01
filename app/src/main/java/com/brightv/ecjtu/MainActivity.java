@@ -134,6 +134,14 @@ public class MainActivity extends AppCompatActivity {
     private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=relativeDayLabel(i-15)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(11);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(bg(i==selectedScheduleIndex?BLUE:Color.rgb(18,39,66),12));b.setPadding(dp(8),dp(5),dp(8),dp(5));b.setMinWidth(dp(112));b.setMinHeight(dp(58));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,dp(58));lp.rightMargin=dp(7);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}
     private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);}
     private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
+    private boolean courseOccursInWeek(String line,int weekNo){
+        if(weekNo<=0)return true;
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?:^|\\\\s)(\\\\d+(?:-\\\\d+)?(?:,\\\\d+(?:-\\\\d+)?)*)\\\\s+[\\\\d,]+$").matcher(line.trim());
+        if(!m.find())return true;
+        String[] ranges=m.group(1).split(",");
+        for(String part:ranges){try{String[] ends=part.split("-");int first=Integer.parseInt(ends[0]);int last=ends.length>1?Integer.parseInt(ends[1]):first;if(weekNo>=first&&weekNo<=last)return true;}catch(Exception ignored){}}
+        return false;
+    }
     private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
         if(start.length()==0)return 0;
@@ -379,7 +387,12 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     String[] days=new String[31];Calendar today=Calendar.getInstance();
-                    for(int i=0;i<31;i++){Calendar d=(Calendar)today.clone();d.add(Calendar.DAY_OF_MONTH,i-15);String courses=weekdayCourses[dayOfWeekIndex(d)];days[i]=courses.isEmpty()?(i==15?"今日无事":"暂无课程"):courses;}
+                    for(int i=0;i<31;i++){
+                        Calendar d=(Calendar)today.clone();d.add(Calendar.DAY_OF_MONTH,i-15);
+                        String source=weekdayCourses[dayOfWeekIndex(d)];int weekNo=getSchoolWeek(d);StringBuilder visible=new StringBuilder();
+                        if(!source.isEmpty()){for(String line:source.split("\\n")){line=line.trim();if(line.isEmpty()||!courseOccursInWeek(line,weekNo))continue;if(visible.length()>0)visible.append("\\n");visible.append(line);}}
+                        days[i]=visible.length()==0?(i==15?"今日无事":"暂无课程"):visible.toString();
+                    }
                     scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
                     prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
                     selectedScheduleIndex=15;todaySummary=days[15];saveValue("schedule",todaySummary);
