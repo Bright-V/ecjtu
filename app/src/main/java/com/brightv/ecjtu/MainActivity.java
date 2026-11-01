@@ -378,7 +378,7 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
-        if(requestCode==REQ_WEATHER_LOCATION){boolean granted=false;for(int result:grantResults)if(result==PackageManager.PERMISSION_GRANTED)granted=true;if(granted)acquireWeatherLocation();else new AlertDialog.Builder(this).setTitle("定位权限未开启").setMessage("天气组件需要定位来匹配当地中央气象台气象站。你也可以稍后在系统设置中开启定位权限。").setPositiveButton("重试",(d,w)->requestWeatherLocation()).setNegativeButton("取消",null).show();}
+        if(requestCode==REQ_WEATHER_LOCATION){boolean granted=false;for(int result:grantResults)if(result==PackageManager.PERMISSION_GRANTED)granted=true;if(granted)acquireWeatherLocation();else new AlertDialog.Builder(this).setTitle("定位权限未开启").setMessage("你可以允许定位自动匹配城市，也可以手动选择省份和城市查看天气。").setPositiveButton("手动选择城市",(d,w)->showManualWeatherCityDialog()).setNegativeButton("稍后再说",null).show();}
     }
     @SuppressLint("MissingPermission") private void acquireWeatherLocation(){
         try{
@@ -387,9 +387,38 @@ public class MainActivity extends AppCompatActivity {
             if(best!=null&&System.currentTimeMillis()-best.getTime()<2*60*60*1000L){resolveCmaStation(best);return;}
             weatherLocationListener=new LocationListener(){public void onLocationChanged(Location l){try{locationManager.removeUpdates(this);}catch(Exception ignored){}weatherLocationListener=null;resolveCmaStation(l);}public void onProviderEnabled(String p){}public void onProviderDisabled(String p){}public void onStatusChanged(String p,int status,android.os.Bundle b){}};
             boolean requested=false;for(String provider:locationManager.getProviders(true))try{locationManager.requestLocationUpdates(provider,0,0,weatherLocationListener,Looper.getMainLooper());requested=true;}catch(Exception ignored){}
-            if(!requested)Toast.makeText(this,"请先开启系统定位服务",Toast.LENGTH_LONG).show();
-            new android.os.Handler().postDelayed(()->{if(weatherLocationListener!=null){try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}weatherLocationListener=null;Toast.makeText(this,"定位超时，请检查定位开关后重试",Toast.LENGTH_LONG).show();}},15000);
+            if(!requested){weatherLocationListener=null;new AlertDialog.Builder(this).setTitle("无法获取定位").setMessage("系统当前没有可用的定位服务，你可以手动选择城市查看天气。").setPositiveButton("手动选择城市",(d,w)->showManualWeatherCityDialog()).setNegativeButton("取消",null).show();return;}
+            new android.os.Handler().postDelayed(()->{if(weatherLocationListener!=null){try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}weatherLocationListener=null;new AlertDialog.Builder(this).setTitle("定位超时").setMessage("暂时无法获取当前位置，你可以手动选择城市查看天气。").setPositiveButton("手动选择城市",(d,w)->showManualWeatherCityDialog()).setNegativeButton("重试定位",(d,w)->requestWeatherLocation()).show();}},15000);
         }catch(Exception e){diagnostic("天气","定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());Toast.makeText(this,"获取定位失败，请稍后重试",Toast.LENGTH_LONG).show();}
+    }
+    private void showManualWeatherCityDialog(){
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);form.setPadding(dp(20),dp(12),dp(20),dp(4));
+        EditText provinceInput=new EditText(this);provinceInput.setSingleLine(true);provinceInput.setHint("省份 / 直辖市，例如：江西省");
+        EditText cityInput=new EditText(this);cityInput.setSingleLine(true);cityInput.setHint("城市，例如：南昌市");
+        form.addView(provinceInput);form.addView(cityInput);
+        new AlertDialog.Builder(this).setTitle("手动选择天气城市").setMessage("填写省份和城市，应用会匹配中央气象台的观测站。").setView(form).setPositiveButton("确认",null).setNegativeButton("取消",null).create();
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("手动选择天气城市").setMessage("填写省份和城市，应用会匹配中央气象台的观测站。").setView(form).setNegativeButton("取消",null).setPositiveButton("确认",null).create();
+        dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String province=provinceInput.getText().toString().trim(),city=cityInput.getText().toString().trim();
+            if(province.isEmpty()||city.isEmpty()){Toast.makeText(this,"请填写省份和城市",Toast.LENGTH_SHORT).show();return;}
+            dialog.dismiss();resolveCmaStationByName(province,city);
+        }));
+        dialog.show();
+    }
+    private void resolveCmaStationByName(String province,String city){
+        Toast.makeText(this,"正在匹配气象站…",Toast.LENGTH_SHORT).show();
+        new Thread(()->{try{
+            JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String provinceCode="";
+            String normalizedProvince=province.replace("省","").replace("市","").replace("壮族自治区","").replace("回族自治区","").replace("维吾尔自治区","");
+            for(int i=0;i<provinces.length();i++){JSONObject item=provinces.getJSONObject(i);String name=item.optString("name");String normalizedName=name.replace("省","").replace("市","").replace("壮族自治区","").replace("回族自治区","").replace("维吾尔自治区","");if(normalizedName.equals(normalizedProvince)||normalizedName.contains(normalizedProvince)||normalizedProvince.contains(normalizedName)){provinceCode=item.optString("code");break;}}
+            if(provinceCode.isEmpty())throw new Exception("没有找到该省份，请检查名称");
+            JSONArray cities=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+provinceCode));JSONObject station=null;String target=city.replace("市","");
+            for(int i=0;i<cities.length();i++){JSONObject item=cities.getJSONObject(i);String name=item.optString("city");if(name.equals(city)||name.equals(target)||name.contains(target)||target.contains(name)){station=item;break;}}
+            if(station==null)throw new Exception("该省份下没有找到这个城市，请检查名称");
+            String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");if(id.isEmpty())throw new Exception("气象站编号为空");
+            prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).apply();
+            runOnUiThread(()->{diagnostic("天气","手动选择气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
+        }catch(Exception e){diagnostic("天气","手动选择气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->new AlertDialog.Builder(this).setTitle("城市匹配失败").setMessage(e.getMessage()+"。请检查网络和填写的省份、城市名称。").setPositiveButton("重新选择",(d,w)->showManualWeatherCityDialog()).setNegativeButton("取消",null).show());}}).start();
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
