@@ -174,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
     private void saveWidgetOrder(ArrayList<String> order){prefs.edit().putString("home_widget_order",android.text.TextUtils.join(",",order)).apply();}
     private void setWidgetEditing(boolean editing){
         widgetEditing=editing;if(widgetEditBar!=null)widgetEditBar.setVisibility(editing?View.VISIBLE:View.GONE);
-        if(widgetContainer!=null)for(int i=0;i<widgetContainer.getChildCount();i++){View v=widgetContainer.getChildAt(i);View remove=v.findViewWithTag("widget_remove");if(remove!=null)remove.setVisibility(editing?View.VISIBLE:View.GONE);v.setAlpha(editing?0.94f:1f);}
+        if(widgetContainer!=null)for(int i=0;i<widgetContainer.getChildCount();i++){View v=widgetContainer.getChildAt(i);View remove=v.findViewWithTag("widget_remove");if(remove!=null)remove.setVisibility(editing?View.VISIBLE:View.GONE);if("widget_drop_target".equals(v.getTag()))v.setVisibility(editing?View.VISIBLE:View.GONE);v.setAlpha(editing?0.94f:1f);}
     }
     private void showAddWidgetDialog(){
         ArrayList<String> order=getWidgetOrder(),missing=new ArrayList<>(),labels=new ArrayList<>();
@@ -206,9 +206,7 @@ public class MainActivity extends AppCompatActivity {
             occupied+=span;
         }
         int emptyCells=(3-(occupied%3))%3;
-        if(widgetEditing){
-            for(int i=0;i<emptyCells;i++)widgetContainer.addView(createWidgetDropTarget(order.size()+i));
-        }
+        for(int i=0;i<emptyCells;i++)widgetContainer.addView(createWidgetDropTarget(order.size()+i));
         if(order.isEmpty()){
             TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);
             empty.setGravity(Gravity.CENTER);
@@ -219,6 +217,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private View createWidgetDropTarget(int targetIndex){
         android.widget.FrameLayout target=new android.widget.FrameLayout(this);
+        target.setTag("widget_drop_target");target.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
         target.setBackground(bg(Color.argb(38,125,177,235),18));
         target.setForeground(getDrawable(android.R.drawable.ic_input_add));
         GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
