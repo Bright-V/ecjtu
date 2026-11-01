@@ -261,16 +261,37 @@ public class MainActivity extends AppCompatActivity {
         if(multiDay){
             value=scheduleDays!=null&&selectedScheduleIndex>=0&&selectedScheduleIndex<scheduleDays.length?scheduleDays[selectedScheduleIndex]:"";
             if(value==null||value.trim().isEmpty())value=selectedScheduleIndex==15?prefs.getString("schedule",""):"";
-        }else{
-            value=prefs==null?"":prefs.getString("schedule","尚未同步课表");
-        }
-        int courses=splitCourseEntries(value).length;
-        if(multiDay){
+            int courses=splitCourseEntries(value).length;
             if(courses<=0)return 3;
             if(courses==1)return 4;
             return 5;
         }
-        return Math.max(1,Math.min(5,courses));
+        value=prefs==null?"":prefs.getString("schedule","尚未同步课表");
+        int courses=splitCourseEntries(value).length;
+        if(courses<=0)return 1;
+        // Measure the rendered course cards rather than assuming one course equals one row.
+        // Five rows is the fixed maximum; overflow remains available through the inner ScrollView.
+        int contentWidth=0;
+        if(widgetContainer!=null){
+            int width=widgetContainer.getWidth();
+            if(width<=0)width=getResources().getDisplayMetrics().widthPixels-dp(40);
+            contentWidth=Math.max(1,width-dp(16));
+        }
+        int cardWidth=Math.max(dp(180),contentWidth);
+        int estimatedHeight=dp(76); // header and vertical padding
+        for(String entry:splitCourseEntries(value)){
+            String line=entry.replaceFirst("^\\\\s*[•·]\\\\s*","").trim();
+            String period="";
+            java.util.regex.Matcher pm=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)\\\\s+").matcher(line);
+            if(pm.find()){period=pm.group(1);line=line.substring(pm.end()).trim();}
+            line=line.replaceFirst("\\\\s+\\\\d+(?:-\\\\d+)?(?:\\\\s*,\\\\s*\\\\d+(?:-\\\\d+)?)*(?:\\\\s*[（(](?:单|双)[）)])?\\\\s+[\\\\d,]+$","").trim();
+            int charsPerLine=Math.max(8,(cardWidth-dp(112))/dp(8));
+            int lines=Math.max(1,(int)Math.ceil((double)line.length()/charsPerLine));
+            int cardHeight=dp(26)+lines*dp(25)+dp(9);
+            estimatedHeight+=Math.max(dp(64),cardHeight)+dp(9);
+        }
+        int rowHeight=Math.max(dp(64),(getResources().getDisplayMetrics().widthPixels-dp(40))/4);
+        return Math.max(1,Math.min(5,(int)Math.ceil((double)estimatedHeight/rowHeight)));
     }
     private View createWidgetDropTarget(int targetIndex){
         android.widget.FrameLayout target=new android.widget.FrameLayout(this);
