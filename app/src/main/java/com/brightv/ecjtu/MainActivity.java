@@ -17,6 +17,7 @@ import java.net.URL;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import android.os.Environment;
+import android.os.Build;
 import android.content.Intent;
 import android.provider.Settings;
 import android.content.ContentValues;
@@ -633,7 +634,7 @@ public class MainActivity extends AppCompatActivity {
             scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);scheduleContent.addView(scheduleDayScroll,dayLp);
             String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
             scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
-            scheduleTimeline.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();}else if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));}return true;}});
+            scheduleTimeline.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();}else if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));}return false;}});
         }else{
             scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
             scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);scheduleContent.addView(scheduleValue);
@@ -878,8 +879,8 @@ public class MainActivity extends AppCompatActivity {
     private void exportLogs(){
         try{
             cleanupDiagnosticLogs();
-            File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);if(!dir.exists())dir.mkdirs();
-            String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());File out=new File(dir,"ECJTUEE_Diagnostic_"+stamp+".txt");
+            String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());
+            String fileName="ECJTUEE_Diagnostic_"+stamp+".txt";
             StringBuilder log=new StringBuilder();
             log.append("ECJTUEE 教务课表诊断日志\n");
             log.append("生成时间: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).append("\n");
@@ -913,8 +914,27 @@ public class MainActivity extends AppCompatActivity {
             log.append("\n========== G. 诊断说明 ==========\n");
             log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存；E 部分记录中央气象台接口返回的天气 JSON 原文（最长保存 30000 个字符）。\n");
             log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整请求 URL。天气 JSON 会保留用于分析的温度数值，但可能包含站点和天气观测信息；原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查。\n");
-            try(FileOutputStream os=new FileOutputStream(out)){os.write(log.toString().getBytes(StandardCharsets.UTF_8));}
-            Toast.makeText(this,"诊断日志已保存到 Downloads/"+out.getName(),Toast.LENGTH_LONG).show();
+            if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q){
+                ContentValues values=new ContentValues();
+                values.put(MediaStore.MediaColumns.DISPLAY_NAME,fileName);
+                values.put(MediaStore.MediaColumns.MIME_TYPE,"text/plain");
+                values.put(MediaStore.MediaColumns.RELATIVE_PATH,Environment.DIRECTORY_DOWNLOADS+"/ECJTUEE");
+                values.put(MediaStore.MediaColumns.IS_PENDING,1);
+                Uri uri=getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,values);
+                if(uri==null)throw new Exception("无法创建下载文件");
+                try(OutputStream os=getContentResolver().openOutputStream(uri)){
+                    if(os==null)throw new Exception("无法打开下载文件");
+                    os.write(log.toString().getBytes(StandardCharsets.UTF_8));os.flush();
+                }catch(Exception writeError){getContentResolver().delete(uri,null,null);throw writeError;}
+                ContentValues ready=new ContentValues();ready.put(MediaStore.MediaColumns.IS_PENDING,0);
+                getContentResolver().update(uri,ready,null,null);
+            }else{
+                File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if(!dir.exists()&&!dir.mkdirs())throw new Exception("无法创建 Downloads 目录");
+                File out=new File(dir,fileName);
+                try(FileOutputStream os=new FileOutputStream(out)){os.write(log.toString().getBytes(StandardCharsets.UTF_8));}
+            }
+            Toast.makeText(this,"诊断日志已保存到 Downloads/ECJTUEE/"+fileName,Toast.LENGTH_LONG).show();
         }catch(Exception e){Toast.makeText(this,"日志保存失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
     }
 
