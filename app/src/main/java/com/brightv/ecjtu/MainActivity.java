@@ -451,8 +451,9 @@ public class MainActivity extends AppCompatActivity {
             for(int i=0;i<stations.length();i++){JSONObject s=stations.getJSONObject(i);if("北京".equals(s.optString("city"))){id=s.optString("code");break;}}
             if(id.isEmpty()&&stations.length()>0)id=stations.getJSONObject(0).optString("code");
             if(id.isEmpty())throw new Exception("未找到北京气象站编号");
-            prefs.edit().putString("weather_station",id).putString("weather_city","北京").putBoolean("weather_ready",true).putBoolean("weather_default_beijing",true).apply();
-            runOnUiThread(()->fetchCmaWeather(id));
+            final String stationId=id;
+            prefs.edit().putString("weather_station",stationId).putString("weather_city","北京").putBoolean("weather_ready",true).putBoolean("weather_default_beijing",true).apply();
+            runOnUiThread(()->fetchCmaWeather(stationId));
         }catch(Exception e){diagnostic("天气","北京默认站点","失败",e.getMessage());runOnUiThread(()->Toast.makeText(this,"北京天气也暂时无法获取，请检查网络",Toast.LENGTH_LONG).show());}}).start();
     }
     private void resolveCmaStationByName(String province,String city){
