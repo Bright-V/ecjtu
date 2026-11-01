@@ -405,7 +405,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             },12000);
         }catch(Exception e){
-            diagnostic("天气","GPS 定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
+            DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
             requestWeatherLocation();
         }
     }
@@ -419,7 +419,7 @@ public class MainActivity extends AppCompatActivity {
             if(region.isEmpty()||city.isEmpty())throw new Exception("IP 定位未能识别到具体省份或城市");
             resolveCmaStationByName(region,city);
         }catch(Exception e){
-            diagnostic("天气","IP 城市定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
             runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));
         }}).start();
     }
@@ -436,7 +436,7 @@ public class MainActivity extends AppCompatActivity {
             final String stationId=id;
             prefs.edit().putString("weather_station",stationId).putString("weather_city","北京").putBoolean("weather_ready",true).putBoolean("weather_default_beijing",true).apply();
             runOnUiThread(()->fetchCmaWeather(stationId));
-        }catch(Exception e){diagnostic("天气","北京默认站点","失败",e.getMessage());runOnUiThread(()->Toast.makeText(this,"北京天气也暂时无法获取，请检查网络",Toast.LENGTH_LONG).show());}}).start();
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","北京默认站点","失败",e.getMessage());runOnUiThread(()->Toast.makeText(this,"北京天气也暂时无法获取，请检查网络",Toast.LENGTH_LONG).show());}}).start();
     }
     private void resolveCmaStationByName(String province,String city){
         new Thread(()->{try{
@@ -449,8 +449,8 @@ public class MainActivity extends AppCompatActivity {
             if(station==null)throw new Exception("未找到对应的中央气象台观测站："+city);
             String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");if(id.isEmpty())throw new Exception("气象站编号为空");
             prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
-            runOnUiThread(()->{diagnostic("天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){diagnostic("天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));}}).start();
+            runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));}}).start();
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
@@ -470,8 +470,8 @@ public class MainActivity extends AppCompatActivity {
             if(station==null)throw new Exception("未找到所在区县或城市的中央气象台站点");
             String id=station.optString("code"),display=station.optString("province")+" "+station.optString("city");if(id.isEmpty())throw new Exception("气象站编号为空");
             prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
-            runOnUiThread(()->{diagnostic("天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){diagnostic("天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
+            runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
     }
     private String weatherHttpGet(String address)throws Exception{
         HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();connection.setRequestMethod("GET");connection.setConnectTimeout(10000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent","Mozilla/5.0 ECJTUEE Android");connection.setRequestProperty("Accept","application/json");
@@ -484,7 +484,7 @@ public class MainActivity extends AppCompatActivity {
             String raw=out.toString();
             String saved=DiagnosticLogger.diagnosticPayload(raw,30000);
             prefs.edit().putString("diag_weather_raw",saved.isEmpty()?"（接口未返回响应正文）":saved).putString("diag_weather_http",String.valueOf(status)).putString("diag_weather_at",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).apply();
-            diagnostic("天气","中央气象台原始响应",status>=200&&status<300?"已保存":"HTTP异常","HTTP状态码="+status+"；响应长度="+raw.length()+"；已保存到导出日志");
+            DiagnosticLogger.diagnostic(prefs,"天气","中央气象台原始响应",status>=200&&status<300?"已保存":"HTTP异常","HTTP状态码="+status+"；响应长度="+raw.length()+"；已保存到导出日志");
             if(status<200||status>=300)throw new Exception("中央气象台 HTTP "+status);
             return raw;
         }finally{connection.disconnect();}
@@ -498,9 +498,9 @@ public class MainActivity extends AppCompatActivity {
             String city=real.optJSONObject("station")==null?prefs.getString("weather_city",""):real.optJSONObject("station").optString("city",prefs.getString("weather_city",""));
             String description=weather.optString("info","").trim(),temperature=weather.optString("temperature","--");temperature=temperature.replace("℃","").replace("°","").trim();try{double n=Double.parseDouble(temperature);if(!Double.isFinite(n)||n<=-90||n>=70)temperature="--";else temperature=String.valueOf((int)Math.round(n));}catch(Exception bad){temperature="--";}boolean validDescription=!description.isEmpty()&&!description.equals("-")&&!description.equals("--");String brief=(validDescription?description+"  ":"")+temperature+(temperature.equals("--")?"":"°");
             weatherData=data;refreshOk=true;prefs.edit().putString("weather_city",city).putString("weather_brief",brief).putString("weather_cache",data.toString()).putLong("weather_updated_ms",System.currentTimeMillis()).apply();
-            diagnostic("天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
+            DiagnosticLogger.diagnostic(prefs,"天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
             runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
-        }catch(Exception e){diagnostic("天气","中央气象台数据更新","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->{if(weatherData==null)Toast.makeText(this,"天气获取失败："+e.getMessage(),Toast.LENGTH_LONG).show();else Toast.makeText(this,"天气更新失败，正在显示缓存数据",Toast.LENGTH_SHORT).show();});}finally{if(countAsHomeRefresh){boolean ok=refreshOk;runOnUiThread(()->finishBackgroundRefresh(ok));}}}).start();
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","中央气象台数据更新","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->{if(weatherData==null)Toast.makeText(this,"天气获取失败："+e.getMessage(),Toast.LENGTH_LONG).show();else Toast.makeText(this,"天气更新失败，正在显示缓存数据",Toast.LENGTH_SHORT).show();});}finally{if(countAsHomeRefresh){boolean ok=refreshOk;runOnUiThread(()->finishBackgroundRefresh(ok));}}}).start();
     }
     private String validWeatherText(JSONObject object,String key){return WeatherDataValidator.validText(object,key);}
     private String validWeatherNumber(JSONObject object,String key,double min,double max){return WeatherDataValidator.validNumber(object,key,min,max);}
@@ -544,7 +544,7 @@ public class MainActivity extends AppCompatActivity {
             JSONObject warn=real==null?null:real.optJSONObject("warn");String warning=validWeatherText(warn,"issuecontent");
             if(warning!=null){LinearLayout alert=card();alert.addView(title("气象预警",18));alert.addView(t(warning,14,MUTED));body.addView(alert);addSpace(body,12);}
             body.addView(t("数据来源：中央气象台（国家气象中心）",12,MUTED));
-        }catch(Exception e){diagnostic("天气","详情渲染","失败",e.getClass().getSimpleName()+": "+e.getMessage());body.addView(t("天气详情暂时无法显示",14,MUTED));}
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","详情渲染","失败",e.getClass().getSimpleName()+": "+e.getMessage());body.addView(t("天气详情暂时无法显示",14,MUTED));}
     }
 
     private LinearLayout createScheduleWidget(){
@@ -660,14 +660,14 @@ public class MainActivity extends AppCompatActivity {
             try{
                 java.net.URL url=new java.net.URL("https://v1.hitokoto.cn/?encode=json");
                 conn=(java.net.HttpURLConnection)url.openConnection();conn.setConnectTimeout(5000);conn.setReadTimeout(5000);conn.setRequestMethod("GET");conn.setRequestProperty("Accept","application/json");
-                int http=conn.getResponseCode();diagnostic("每日一言","HTTP请求",http==200?"成功":"失败","HTTP状态码="+http);if(http!=200)throw new java.io.IOException("HTTP "+http);
+                int http=conn.getResponseCode();DiagnosticLogger.diagnostic(prefs,"每日一言","HTTP请求",http==200?"成功":"失败","HTTP状态码="+http);if(http!=200)throw new java.io.IOException("HTTP "+http);
                 java.io.BufferedReader br=new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream(),StandardCharsets.UTF_8));StringBuilder raw=new StringBuilder();String line;while((line=br.readLine())!=null)raw.append(line);br.close();
-                String rawText=raw.toString();prefs.edit().putString("diag_hitokoto_raw",DiagnosticLogger.diagnosticText(rawText,1800)).apply();diagnostic("每日一言","原始响应","已获取",diagnosticText(rawText,1800));org.json.JSONObject o=new org.json.JSONObject(rawText);String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
+                String rawText=raw.toString();prefs.edit().putString("diag_hitokoto_raw",DiagnosticLogger.diagnosticText(rawText,1800)).apply();DiagnosticLogger.diagnostic(prefs,"每日一言","原始响应","已获取",DiagnosticLogger.diagnosticText(rawText,1800));org.json.JSONObject o=new org.json.JSONObject(rawText);String quote=o.optString("hitokoto","").trim();String from=o.optString("from","").trim();String who=o.optString("from_who","").trim();
                 if("null".equalsIgnoreCase(from))from="";if("null".equalsIgnoreCase(who))who="";if(quote.isEmpty())return;
                 String source="";if(!who.isEmpty()&&!from.isEmpty())source="—— "+who+" · "+from;else if(!who.isEmpty())source="—— "+who;else if(!from.isEmpty())source="—— "+from;
-                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();diagnostic("每日一言","JSON解析与缓存","成功","句子长度="+quote.length()+"；来源="+source);
+                prefs.edit().putString("hitokoto",quote).putString("hitokoto_from",source).putString("hitokoto_date",today).apply();DiagnosticLogger.diagnostic(prefs,"每日一言","JSON解析与缓存","成功","句子长度="+quote.length()+"；来源="+source);
                 final String finalSource=source;runOnUiThread(()->{if(hitokotoValue!=null)hitokotoValue.setText(quote);if(hitokotoFrom!=null){hitokotoFrom.setText(finalSource);hitokotoFrom.setVisibility(finalSource.isEmpty()?View.GONE:View.VISIBLE);}});
-            }catch(Exception e){diagnostic("每日一言","请求或解析","失败",e.getClass().getSimpleName()+": "+e.getMessage());}finally{if(conn!=null)conn.disconnect();}
+            }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"每日一言","请求或解析","失败",e.getClass().getSimpleName()+": "+e.getMessage());}finally{if(conn!=null)conn.disconnect();}
         }).start();
     }
 
@@ -771,7 +771,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void exportLogs(){
         try{
-            cleanupDiagnosticLogs();
+            DiagnosticLogger.cleanupDiagnosticLogs(prefs);
             String stamp=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date());
             String fileName="ECJTUEE_Diagnostic_"+stamp+".txt";
             StringBuilder log=new StringBuilder();
@@ -859,9 +859,9 @@ public class MainActivity extends AppCompatActivity {
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
                         String module=type==0?"教务课表":type==1?"宿舍电费":"校园卡";String payload=jsClean(x);
-                        diagnostic(module,"页面数据抓取",ok?"成功":"失败","返回长度="+payload.length()+"；摘要="+diagnosticText(payload,1800));
+                        DiagnosticLogger.diagnostic(prefs,module,"页面数据抓取",ok?"成功":"失败","返回长度="+payload.length()+"；摘要="+DiagnosticLogger.diagnosticText(payload,1800));
                         if(type==0&&!ok){String failed=jsClean(x);lastJwxtCaptureStatus="抓取失败或未识别到课表表格；页面可能未登录、未加载完成或表格结构变化";lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());lastJwxtRawData="原始返回内容（截取前3000字符）:\n"+failed.substring(0,Math.min(3000,failed.length()));}
-                        if(ok)parseSync(x,type==0,type==1,type==2);else diagnostic(module,"数据校验","失败","未找到预期数据标记或关键字段");
+                        if(ok)parseSync(x,type==0,type==1,type==2);else DiagnosticLogger.diagnostic(prefs,module,"数据校验","失败","未找到预期数据标记或关键字段");
                         finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}
                         finishBackgroundRefresh(ok);
                     });
@@ -883,7 +883,7 @@ public class MainActivity extends AppCompatActivity {
         if(backgroundRefreshPending==0){
             backgroundRefreshing=false;
             if(homeRefresh!=null)homeRefresh.setRefreshing(false);
-            diagnostic("首页","后台刷新汇总",backgroundRefreshFailures==0?"成功":"部分失败","失败项目数="+backgroundRefreshFailures);
+            DiagnosticLogger.diagnostic(prefs,"首页","后台刷新汇总",backgroundRefreshFailures==0?"成功":"部分失败","失败项目数="+backgroundRefreshFailures);
             if(backgroundRefreshFailures>0)Toast.makeText(this,"首页刷新失败：有 "+backgroundRefreshFailures+" 项未能更新，请检查网络或登录状态",Toast.LENGTH_LONG).show();
         }
     }
@@ -895,7 +895,7 @@ public class MainActivity extends AppCompatActivity {
         Button back=navButton("‹",true),home=navButton("首页",true),refresh=navButton("刷新",false);browserTitle=title("",15);browserTitle.setGravity(Gravity.CENTER);
         bar.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));bar.addView(home,new LinearLayout.LayoutParams(dp(72),dp(54)));bar.addView(browserTitle,new LinearLayout.LayoutParams(0,dp(54),1));bar.addView(refresh,new LinearLayout.LayoutParams(dp(72),dp(54)));
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);webView=new WebView(this);WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(webView,true);
-        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){diagnostic("WebView","SSL错误","失败","主机="+(e.getUrl()==null?"未知":Uri.parse(e.getUrl()).getHost())+"；错误码="+e.getPrimaryError());h.cancel();}@Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame())diagnostic("WebView","页面加载","失败","主机="+r.getUrl().getHost()+"；错误码="+e.getErrorCode()+"；描述="+e.getDescription());}@Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse e){if(r.isForMainFrame())diagnostic("WebView","HTTP响应",e.getStatusCode()<400?"成功":"失败","主机="+r.getUrl().getHost()+"；状态码="+e.getStatusCode());}@Override public void onPageStarted(WebView v,String u,android.graphics.Bitmap icon){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面开始加载","开始","主机="+host);}@Override public void onPageFinished(WebView v,String u){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面加载完成","成功","主机="+host+"；标题="+v.getTitle());progress.setVisibility(View.GONE);CookieManager.getInstance().flush();syncFromPage(v,u);if(setupInProgress&&u!=null&&u.contains("jwxt.ecjtu.edu.cn/index.action")){browserTitle.setText("首次设置 · 正在配置");new android.os.Handler().postDelayed(()->webView.loadUrl(BILLSYS_OAUTH),500);return;}if(setupInProgress&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){setupInProgress=false;prefs.edit().putBoolean("setupComplete",true).putBoolean("billsysLogged",true).apply();Toast.makeText(MainActivity.this,"设置完成",Toast.LENGTH_SHORT).show();new android.os.Handler().postDelayed(()->showHome(),700);return;}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
+        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){DiagnosticLogger.diagnostic(prefs,"WebView","SSL错误","失败","主机="+(e.getUrl()==null?"未知":Uri.parse(e.getUrl()).getHost())+"；错误码="+e.getPrimaryError());h.cancel();}@Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame())DiagnosticLogger.diagnostic(prefs,"WebView","页面加载","失败","主机="+r.getUrl().getHost()+"；错误码="+e.getErrorCode()+"；描述="+e.getDescription());}@Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse e){if(r.isForMainFrame())DiagnosticLogger.diagnostic(prefs,"WebView","HTTP响应",e.getStatusCode()<400?"成功":"失败","主机="+r.getUrl().getHost()+"；状态码="+e.getStatusCode());}@Override public void onPageStarted(WebView v,String u,android.graphics.Bitmap icon){String host=u==null?"未知":Uri.parse(u).getHost();DiagnosticLogger.diagnostic(prefs,"WebView","页面开始加载","开始","主机="+host);}@Override public void onPageFinished(WebView v,String u){String host=u==null?"未知":Uri.parse(u).getHost();DiagnosticLogger.diagnostic(prefs,"WebView","页面加载完成","成功","主机="+host+"；标题="+v.getTitle());progress.setVisibility(View.GONE);CookieManager.getInstance().flush();syncFromPage(v,u);if(setupInProgress&&u!=null&&u.contains("jwxt.ecjtu.edu.cn/index.action")){browserTitle.setText("首次设置 · 正在配置");new android.os.Handler().postDelayed(()->webView.loadUrl(BILLSYS_OAUTH),500);return;}if(setupInProgress&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){setupInProgress=false;prefs.edit().putBoolean("setupComplete",true).putBoolean("billsysLogged",true).apply();Toast.makeText(MainActivity.this,"设置完成",Toast.LENGTH_SHORT).show();new android.os.Handler().postDelayed(()->showHome(),700);return;}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
         webView.setWebChromeClient(new WebChromeClient(){@Override public void onProgressChanged(WebView v,int p){progress.setVisibility(p<100?View.VISIBLE:View.GONE);progress.setProgress(p);}});
         back.setOnClickListener(v->{if(webView.canGoBack())webView.goBack();else showHome();});home.setOnClickListener(v->showHome());refresh.setOnClickListener(v->webView.reload());
         browserView.addView(bar);browserView.addView(progress,new LinearLayout.LayoutParams(-1,dp(3)));browserView.addView(webView,new LinearLayout.LayoutParams(-1,0,1));applySystemBarInsets(browserView);}
@@ -910,7 +910,7 @@ public class MainActivity extends AppCompatActivity {
          if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];function blocks(cell){var box=cell;for(var n=0;n<6&&box.children&&box.children.length===1;n++)box=box.children[0];var kids=box.children;if(kids&&kids.length>1){var out=[];for(var k=0;k<kids.length;k++){var tx=(kids[k].innerText||kids[k].textContent||'').replace(/\\r/g,'').trim();if(tx)out.push(tx);}if(out.length>1)return out;}var raw=(cell.innerText||cell.textContent||'').replace(/\\r/g,'').trim();return raw?[raw]:[];}for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';if(!/^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)$/.test(slot))continue;for(var d=1;d<=7;d++){if(c.length<=d)continue;var parts=blocks(c[d]);for(var q=0;q<parts.length;q++){var val=parts[q];if(val&&val!=='-'&&val!=='无')days[d-1].push(slot+'\\t'+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
-        v.evaluateJavascript(js,value->{String module=jw?"教务课表":bill?"宿舍电费":"校园卡";String payload=jsClean(value);diagnostic(module,"前台页面抓取","完成","返回长度="+payload.length()+"；摘要="+diagnosticText(payload,1500));parseSync(value,jw,bill,card);});
+        v.evaluateJavascript(js,value->{String module=jw?"教务课表":bill?"宿舍电费":"校园卡";String payload=jsClean(value);DiagnosticLogger.diagnostic(prefs,module,"前台页面抓取","完成","返回长度="+payload.length()+"；摘要="+DiagnosticLogger.diagnosticText(payload,1500));parseSync(value,jw,bill,card);});
     }
     private String jsClean(String s){if(s==null)return "";if(s.length()>=2&&s.charAt(0)=='"'&&s.charAt(s.length()-1)=='"')s=s.substring(1,s.length()-1);return s.replace("\\n"," ").replace("\\\"","\"");}
     private void parseSync(String raw,boolean jw,boolean bill,boolean card){
