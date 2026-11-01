@@ -413,6 +413,7 @@ public class MainActivity extends AppCompatActivity {
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
+                        if(type==0&&!ok){String failed=jsClean(x);lastJwxtCaptureStatus="抓取失败或未识别到课表表格；页面可能未登录、未加载完成或表格结构变化";lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());lastJwxtRawData="原始返回内容（截取前3000字符）:\n"+failed.substring(0,Math.min(3000,failed.length()));}
                         if(ok)parseSync(x,type==0,type==1,type==2);
                         finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}
                         finishBackgroundRefresh(ok);
@@ -488,7 +489,7 @@ public class MainActivity extends AppCompatActivity {
                     StringBuilder rawDiagnostic=new StringBuilder();
                     String[] weekdayNames={"星期一","星期二","星期三","星期四","星期五","星期六","星期日"};
                     for(int i=0;i<7;i++){
-                        try{String decoded=java.net.URLDecoder.decode(encoded[i],"UTF-8").replace("\\r","").replace("\\\\n","\\n").replace("\\n","\\n");rawDiagnostic.append("【").append(weekdayNames[i]).append("】\\n").append(decoded.isEmpty()?"（空）":decoded).append("\\n");}catch(Exception ex){rawDiagnostic.append("【").append(weekdayNames[i]).append("】解码失败: ").append(ex.getClass().getSimpleName()).append("\\n");}
+                        try{String decoded=java.net.URLDecoder.decode(encoded[i],"UTF-8").replace("\\r","").replace("\\\\n","\\n").replace("\\n","\\n");rawDiagnostic.append("【").append(weekdayNames[i]).append("】\n").append(decoded.isEmpty()?"（空）":decoded).append("\n");}catch(Exception ex){rawDiagnostic.append("【").append(weekdayNames[i]).append("】解码失败: ").append(ex.getClass().getSimpleName()).append("\n");}
                     }
                     lastJwxtRawData=rawDiagnostic.toString();
                     lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());
@@ -511,7 +512,7 @@ public class MainActivity extends AppCompatActivity {
                         days[i]=visible.length()==0?(i==15?"今日无事":"暂无课程"):visible.toString();
                     }
                     StringBuilder parsedDiagnostic=new StringBuilder();
-                    for(int i=0;i<7;i++){parsedDiagnostic.append("【").append(weekdayNames[i]).append("】\\n");for(String item:splitCourseEntries(weekdayCourses[i]))parsedDiagnostic.append("  ").append(item).append("\\n");}
+                    for(int i=0;i<7;i++){parsedDiagnostic.append("【").append(weekdayNames[i]).append("】\n");for(String item:splitCourseEntries(weekdayCourses[i]))parsedDiagnostic.append("  ").append(item).append("\n");}
                     lastJwxtParsedData=parsedDiagnostic.toString();
                     scheduleDays=days;StringBuilder packed=new StringBuilder();for(String day:days){if(packed.length()>0)packed.append((char)30);packed.append(day);}
                     prefs.edit().putString("scheduleDays",packed.toString()).putBoolean("jwxtLogged",true).apply();
