@@ -573,38 +573,27 @@ public class MainActivity extends AppCompatActivity {
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
         ScrollView scheduleScroll=new ScrollView(this);scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         final float[] scheduleTouchStart={0f,0f};
-        final int[] scheduleGestureAxis={0}; // 0=未判定，1=纵向滚动，2=横向切日
+        final int[] scheduleGestureAxis={0}; // 0=未判定，1=纵向
         scheduleScroll.setOnTouchListener((v,event)->{
             int action=event.getActionMasked();
             if(action==android.view.MotionEvent.ACTION_DOWN){
                 scheduleTouchStart[0]=event.getX();scheduleTouchStart[1]=event.getY();
                 scheduleGestureAxis[0]=0;
-                // 先不抢父容器事件，等手势方向明确后再决定由谁滚动。
+                // 先锁住父容器，确保内层课表能收到完整的滑动事件。
+                v.getParent().requestDisallowInterceptTouchEvent(true);
             }else if(action==android.view.MotionEvent.ACTION_MOVE){
                 float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
                 int slop=android.view.ViewConfiguration.get(this).getScaledTouchSlop();
-                if(scheduleGestureAxis[0]==0&&(Math.abs(dx)>slop||Math.abs(dy)>slop)){
-                    scheduleGestureAxis[0]=Math.abs(dx)>Math.abs(dy)?2:1;
+                if(scheduleGestureAxis[0]==0&&Math.abs(dy)>slop&&Math.abs(dy)>=Math.abs(dx))scheduleGestureAxis[0]=1;
+                if(scheduleGestureAxis[0]==1){
+                    boolean innerCanScroll=dy<0?v.canScrollVertically(1):v.canScrollVertically(-1);
+                    v.getParent().requestDisallowInterceptTouchEvent(innerCanScroll);
                 }
-                if(scheduleGestureAxis[0]==2){
-                    // 横向手势只负责切换日期，不再与纵向滚动反复争夺事件。
-                    v.getParent().requestDisallowInterceptTouchEvent(true);
-                }else if(scheduleGestureAxis[0]==1){
-                    boolean canScroll=dy<0?v.canScrollVertically(1):v.canScrollVertically(-1);
-                    // 内层课表能继续滚动时由它处理；到达对应边界后交给首页外层滚动容器。
-                    v.getParent().requestDisallowInterceptTouchEvent(canScroll);
-                }
-            }else if(action==android.view.MotionEvent.ACTION_UP){
-                float dx=event.getX()-scheduleTouchStart[0],dy=event.getY()-scheduleTouchStart[1];
-                if(scheduleGestureAxis[0]==2&&Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))
-                    selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));
-                v.getParent().requestDisallowInterceptTouchEvent(false);
-                scheduleGestureAxis[0]=0;
-            }else if(action==android.view.MotionEvent.ACTION_CANCEL){
+            }else if(action==android.view.MotionEvent.ACTION_UP||action==android.view.MotionEvent.ACTION_CANCEL){
                 v.getParent().requestDisallowInterceptTouchEvent(false);
                 scheduleGestureAxis[0]=0;
             }
-            return false; // 保留 ScrollView 自己的滚动处理。
+            return false;
         });
         LinearLayout scheduleContent=new LinearLayout(this);scheduleContent.setOrientation(LinearLayout.VERTICAL);scheduleScroll.addView(scheduleContent,new ScrollView.LayoutParams(-1,-2));
         schedule.addView(scheduleScroll,new LinearLayout.LayoutParams(-1,0,1));
