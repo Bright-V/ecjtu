@@ -195,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
         for(String id:order){
             boolean fullWidth="schedule".equals(id);
             int columnSpan=fullWidth?4:2;
-            int rowSpan=fullWidth?8:2;
+            int rowSpan=fullWidth?6:2;
             android.widget.FrameLayout frame=createWidgetFrame(id);
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
                     GridLayout.spec(GridLayout.UNDEFINED,rowSpan),
@@ -210,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
                 if(measured instanceof GridLayout.LayoutParams){
                     GridLayout.LayoutParams sized=(GridLayout.LayoutParams)measured;
                     int width=frame.getWidth();
-                    int targetHeight=fullWidth?width*2:width;
+                    int targetHeight=fullWidth?(width*3)/2:width;
                     if(width>0&&sized.height!=targetHeight){sized.height=targetHeight;frame.setLayoutParams(sized);}
                 }
             });
