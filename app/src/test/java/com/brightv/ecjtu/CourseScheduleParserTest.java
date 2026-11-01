@@ -5,7 +5,7 @@ import static org.junit.Assert.*;
 
 public class CourseScheduleParserTest {
     @Test public void splitsCourseEntriesByPeriodAndWeekLine() {
-        String[] entries = CourseScheduleParser.splitCourseEntries("1-2\\t高等数学 张老师 @教1-201\\n1-16周 1,2\\n3-4\\t大学英语 李老师 @语音室");
+        String[] entries = CourseScheduleParser.splitCourseEntries("1-2\t高等数学 张老师 @教1-201\n1-16周 1,2\n3-4\t大学英语 李老师 @语音室");
         assertEquals(2, entries.length);
         assertTrue(entries[0].startsWith("1-2 高等数学"));
         assertTrue(entries[0].contains("1-16周"));
