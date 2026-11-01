@@ -25,17 +25,6 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
-      - name: Generate launcher icon from repository 1.ico
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq imagemagick
-          mkdir -p app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-          convert '1.ico[0]' -resize 48x48 app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert '1.ico[0]' -resize 72x72 app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert '1.ico[0]' -resize 96x96 app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert '1.ico[0]' -resize 144x144 app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert '1.ico[0]' -resize 192x192 app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
       - name: Restore signing keystore
         env:
           ECJTU_KEYSTORE_BASE64: ${{ secrets.ECJTU_KEYSTORE_BASE64 }}
