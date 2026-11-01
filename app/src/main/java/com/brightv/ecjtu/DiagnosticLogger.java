@@ -26,11 +26,11 @@ final class DiagnosticLogger {
         return kept.toString();
     }
 
-    static void cleanupDiagnosticLogs(){
+    static void cleanupDiagnosticLogs(SharedPreferences prefs){
         try{String kept=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());prefs.edit().putString("diag_events",kept).apply();}catch(Exception ignored){}
     }
 
-    static void diagnostic(String module,String stage,String status,String detail){
+    static void diagnostic(SharedPreferences prefs,String module,String stage,String status,String detail){
         try{
             String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
             safe=safe.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
