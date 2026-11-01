@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
 
-    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),true);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(Color.rgb(18,39,66));CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);cleanupDiagnosticLogs();if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
+    @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),false);getWindow().setStatusBarColor(Color.TRANSPARENT);getWindow().setNavigationBarColor(Color.TRANSPARENT);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightStatusBars(false);WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView()).setAppearanceLightNavigationBars(false);CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);cleanupDiagnosticLogs();if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
     private static final long DIAGNOSTIC_RETENTION_MS=15L*60L*1000L;
     private String pruneDiagnosticEvents(String raw,long now){
         if(raw==null||raw.isEmpty())return "";
@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
     private TextView title(String s,float z){TextView v=t(s,z,Color.WHITE);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private void addSpace(LinearLayout p,int h){Space s=new Space(this);p.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
-    private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}
+    private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}\n    private void applySystemBarInsets(View root){\n        final int baseLeft=root.getPaddingLeft(),baseTop=root.getPaddingTop(),baseRight=root.getPaddingRight(),baseBottom=root.getPaddingBottom();\n        ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets)->{\n            androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());\n            view.setPadding(baseLeft+bars.left,baseTop+bars.top,baseRight+bars.right,baseBottom+bars.bottom);\n            return insets;\n        });\n        ViewCompat.requestApplyInsets(root);\n    }
 
     private void buildSetup(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackground(pageBackground());applyPagePadding(root,dp(28),dp(30),dp(28),dp(30));
@@ -127,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout semester=card();semester.addView(title("开学日期设定",18));semester.addView(t("设置本学期第一周周一的日期，首页将自动显示当前周次。",13,MUTED));Button semesterBtn=new Button(this);semesterBtn.setText(prefs.getString("semesterStart","").length()>0?"已设置："+prefs.getString("semesterStart",""):"设置开学日期");semesterBtn.setAllCaps(false);semesterBtn.setTextColor(Color.WHITE);semesterBtn.setBackground(glass(14));semesterBtn.setOnClickListener(v->chooseSemesterStart());semester.addView(semesterBtn,new LinearLayout.LayoutParams(-1,dp(50)));root.addView(semester);addSpace(root,18);
         Button login=new Button(this);login.setText("登录校园账号");login.setAllCaps(false);login.setTextColor(Color.WHITE);login.setTextSize(16);login.setBackground(bg(Color.rgb(55,132,230),18));login.setElevation(dp(4));login.setOnClickListener(v->{setupInProgress=true;open("首次设置 · 登录",JWXT_OAUTH);});root.addView(login,new LinearLayout.LayoutParams(-1,dp(56)));
         TextView note=t("继续即表示你将前往学校官方统一身份认证页面。",12,MUTED);note.setGravity(Gravity.CENTER);note.setPadding(0,dp(14),0,0);root.addView(note);
-        setContentView(root);
+        applySystemBarInsets(root);setContentView(root);
     }
     private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(16),dp(18),dp(16));c.setBackground(glass(22));c.setElevation(dp(2));return c;}
     private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(glass(16));b.setElevation(dp(2));b.setOnClickListener(v->open(label,url));return b;}
@@ -159,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
         Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",false);
         n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->buildSettings());
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
-        root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
+        root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);applySystemBarInsets(root);setContentView(root);
         homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
     }
 
@@ -357,7 +357,7 @@ public class MainActivity extends AppCompatActivity {
         Button back=navButton("‹ 返回",true);back.setOnClickListener(v->buildHome());bar.addView(back);
         TextView title=title("天气",19);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(52),1));
         Button refresh=navButton("刷新",false);refresh.setOnClickListener(v->{if(prefs.getBoolean("weather_ready",false))fetchCmaWeather(prefs.getString("weather_station",""));else requestWeatherLocation();});bar.addView(refresh);weatherPage.addView(bar);
-        ScrollView scroll=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(8),dp(18),dp(28));scroll.addView(body);weatherPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));setContentView(weatherPage);
+        ScrollView scroll=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(8),dp(18),dp(28));scroll.addView(body);weatherPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));applySystemBarInsets(weatherPage);setContentView(weatherPage);
         if(weatherData==null){String cache=prefs.getString("weather_cache","");if(!cache.isEmpty())try{weatherData=new JSONObject(cache);}catch(Exception ignored){}}
         renderWeatherPage();
     }
@@ -634,7 +634,7 @@ public class MainActivity extends AppCompatActivity {
         n1.setOnClickListener(v->showHome());n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->{});
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
 
-        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);applySystemBarInsets(root);setContentView(root);
     }
     private SecretKey passwordKey(char[] password,byte[] salt) throws Exception{
         PBEKeySpec spec=new PBEKeySpec(password,salt,150000,256);
@@ -799,7 +799,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){diagnostic("WebView","SSL错误","失败","主机="+(e.getUrl()==null?"未知":Uri.parse(e.getUrl()).getHost())+"；错误码="+e.getPrimaryError());h.cancel();}@Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame())diagnostic("WebView","页面加载","失败","主机="+r.getUrl().getHost()+"；错误码="+e.getErrorCode()+"；描述="+e.getDescription());}@Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse e){if(r.isForMainFrame())diagnostic("WebView","HTTP响应",e.getStatusCode()<400?"成功":"失败","主机="+r.getUrl().getHost()+"；状态码="+e.getStatusCode());}@Override public void onPageStarted(WebView v,String u,android.graphics.Bitmap icon){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面开始加载","开始","主机="+host);}@Override public void onPageFinished(WebView v,String u){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面加载完成","成功","主机="+host+"；标题="+v.getTitle());progress.setVisibility(View.GONE);CookieManager.getInstance().flush();captureSchedule(v,u);syncFromPage(v,u);if(setupInProgress&&u!=null&&u.contains("jwxt.ecjtu.edu.cn/index.action")){browserTitle.setText("首次设置 · 正在配置");new android.os.Handler().postDelayed(()->webView.loadUrl(BILLSYS_OAUTH),500);return;}if(setupInProgress&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){setupInProgress=false;prefs.edit().putBoolean("setupComplete",true).putBoolean("billsysLogged",true).apply();Toast.makeText(MainActivity.this,"设置完成",Toast.LENGTH_SHORT).show();new android.os.Handler().postDelayed(()->showHome(),700);return;}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
         webView.setWebChromeClient(new WebChromeClient(){@Override public void onProgressChanged(WebView v,int p){progress.setVisibility(p<100?View.VISIBLE:View.GONE);progress.setProgress(p);}});
         back.setOnClickListener(v->{if(webView.canGoBack())webView.goBack();else showHome();});home.setOnClickListener(v->showHome());refresh.setOnClickListener(v->webView.reload());
-        browserView.addView(bar);browserView.addView(progress,new LinearLayout.LayoutParams(-1,dp(3)));browserView.addView(webView,new LinearLayout.LayoutParams(-1,0,1));}
+        browserView.addView(bar);browserView.addView(progress,new LinearLayout.LayoutParams(-1,dp(3)));browserView.addView(webView,new LinearLayout.LayoutParams(-1,0,1));applySystemBarInsets(browserView);}
     private void open(String title,String url){open(title,url,true);}
     private void open(String title,String url,boolean returnHomeAfterLogin){ensureBrowser();browserTitle.setText(title);setContentView(browserView);browserView.setVisibility(View.VISIBLE);progress.setVisibility(View.VISIBLE);returnAfterLogin=returnHomeAfterLogin&&!setupInProgress&&url.contains("mobile.ecjtu.edu.cn/oauth/authorize")&&!url.equals(BILLSYS_OAUTH);webView.loadUrl(url);}
     private void showHome(){if(!prefs.getBoolean("setupComplete",false)){buildSetup();return;}buildHome();}
