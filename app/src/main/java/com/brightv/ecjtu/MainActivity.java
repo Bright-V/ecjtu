@@ -366,14 +366,14 @@ public class MainActivity extends AppCompatActivity {
 
 
     private LinearLayout createWeatherWidget(){
-        LinearLayout c=card();c.setMinimumHeight(dp(164));c.setGravity(Gravity.CENTER_VERTICAL);c.setOnClickListener(v->openWeather());
+        LinearLayout c=card();c.setMinimumHeight(dp(132));c.setOnClickListener(v->openWeather());
         LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading=title("☀  今日天气",16);row.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
+        TextView heading=title("☀  今日天气",15);row.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
         weatherWidgetCity=t(prefs.getString("weather_city","首次点击获取定位天气"),13,MUTED);row.addView(weatherWidgetCity);c.addView(row);
         LinearLayout data=new LinearLayout(this);data.setGravity(Gravity.CENTER_VERTICAL);
-        weatherWidgetInfo=title(prefs.getString("weather_brief","点击查看天气详情"),20);data.addView(weatherWidgetInfo,new LinearLayout.LayoutParams(0,-2,1));
+        weatherWidgetInfo=title(prefs.getString("weather_brief","点击查看天气详情"),24);weatherWidgetInfo.setPadding(dp(4),dp(12),dp(4),0);data.addView(weatherWidgetInfo,new LinearLayout.LayoutParams(0,-2,1));
         data.addView(t("详情  ›",13,BLUE));c.addView(data);
-        c.addView(t("中央气象台 · 查看详情",10,MUTED));return c;
+        c.addView(t("中央气象台 · 查看详情",13,Color.rgb(85,157,255)));return c;
     }
     private void openWeather(){
         buildWeatherPage();
@@ -522,7 +522,7 @@ public class MainActivity extends AppCompatActivity {
             JSONObject root=new JSONObject(weatherHttpGet("https://www.nmc.cn/rest/weather?stationid="+Uri.encode(station)));JSONObject data=root.optJSONObject("data");if(data==null)throw new Exception("中央气象台未返回天气数据");
             JSONObject real=data.optJSONObject("real");JSONObject weather=real==null?null:real.optJSONObject("weather");if(weather==null)throw new Exception("实时天气数据暂缺");
             String city=real.optJSONObject("station")==null?prefs.getString("weather_city",""):real.optJSONObject("station").optString("city",prefs.getString("weather_city",""));
-            String description=weather.optString("info","天气"),temperature=weather.optString("temperature","--");temperature=temperature.replace("℃","").replace("°","").trim();try{double n=Double.parseDouble(temperature);if(!Double.isFinite(n)||n<=-90||n>=70)temperature="--";else temperature=String.valueOf((int)Math.round(n));}catch(Exception bad){temperature="--";}String brief=description+"  "+temperature+(temperature.equals("--")?"":"°");
+            String description=weather.optString("info","").trim(),temperature=weather.optString("temperature","--");temperature=temperature.replace("℃","").replace("°","").trim();try{double n=Double.parseDouble(temperature);if(!Double.isFinite(n)||n<=-90||n>=70)temperature="--";else temperature=String.valueOf((int)Math.round(n));}catch(Exception bad){temperature="--";}boolean validDescription=!description.isEmpty()&&!description.equals("-")&&!description.equals("--");String brief=(validDescription?description+"  ":"")+temperature+(temperature.equals("--")?"":"°");
             weatherData=data;refreshOk=true;prefs.edit().putString("weather_city",city).putString("weather_brief",brief).putString("weather_cache",data.toString()).putLong("weather_updated_ms",System.currentTimeMillis()).apply();
             diagnostic("天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
             runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
