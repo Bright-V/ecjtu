@@ -152,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
         TextView editHint=t("长按卡片进入编辑，可拖动排序",12,MUTED);widgetEditBar.addView(editHint,new LinearLayout.LayoutParams(0,-2,1));
         Button addWidget=navButton("＋ 添加",true);addWidget.setOnClickListener(v->showAddWidgetDialog());widgetEditBar.addView(addWidget,new LinearLayout.LayoutParams(dp(96),dp(44)));
         Button doneWidget=navButton("完成",true);doneWidget.setOnClickListener(v->setWidgetEditing(false));widgetEditBar.addView(doneWidget,new LinearLayout.LayoutParams(dp(76),dp(44)));
-        homeView.addView(widgetEditBar);widgetContainer=new LinearLayout(this);widgetContainer.setOrientation(LinearLayout.VERTICAL);homeView.addView(widgetContainer);renderDashboardWidgets();
+        homeView.addView(widgetEditBar);widgetContainer=new GridLayout(this);widgetContainer.setColumnCount(3);homeView.addView(widgetContainer);renderDashboardWidgets();
                 homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
 
         LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackground(glass(24));nav.setElevation(dp(8));nav.setClipToOutline(true);
