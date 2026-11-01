@@ -511,9 +511,28 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(()->{diagnostic("天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
         }catch(Exception e){diagnostic("天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
     }
+    private String diagnosticPayload(String raw,int max){
+        if(raw==null)return "";
+        String value=raw.replace("\r","");
+        value=value.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
+        if(value.length()>max)value=value.substring(0,max)+"\n…（原始响应过长，已截断）";
+        return value;
+    }
     private String weatherHttpGet(String address)throws Exception{
         HttpURLConnection connection=(HttpURLConnection)new URL(address).openConnection();connection.setRequestMethod("GET");connection.setConnectTimeout(10000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent","Mozilla/5.0 ECJTUEE Android");connection.setRequestProperty("Accept","application/json");
-        try{int status=connection.getResponseCode();if(status<200||status>=300)throw new Exception("中央气象台 HTTP "+status);BufferedReader reader=new BufferedReader(new InputStreamReader(connection.getInputStream(),StandardCharsets.UTF_8));StringBuilder out=new StringBuilder();String line;while((line=reader.readLine())!=null)out.append(line);reader.close();return out.toString();}finally{connection.disconnect();}
+        prefs.edit().remove("diag_weather_raw").putString("diag_weather_http","请求中").putString("diag_weather_at",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).apply();
+        try{
+            int status=connection.getResponseCode();
+            InputStream stream=(status>=200&&status<300)?connection.getInputStream():connection.getErrorStream();
+            StringBuilder out=new StringBuilder();
+            if(stream!=null){BufferedReader reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8));String line;while((line=reader.readLine())!=null)out.append(line);reader.close();}
+            String raw=out.toString();
+            String saved=diagnosticPayload(raw,30000);
+            prefs.edit().putString("diag_weather_raw",saved.isEmpty()?"（接口未返回响应正文）":saved).putString("diag_weather_http",String.valueOf(status)).putString("diag_weather_at",new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date())).apply();
+            diagnostic("天气","中央气象台原始响应",status>=200&&status<300?"已保存":"HTTP异常","HTTP状态码="+status+"；响应长度="+raw.length()+"；已保存到导出日志");
+            if(status<200||status>=300)throw new Exception("中央气象台 HTTP "+status);
+            return raw;
+        }finally{connection.disconnect();}
     }
     private void fetchCmaWeather(String station){fetchCmaWeather(station,false);}
     private void fetchCmaWeather(String station,boolean countAsHomeRefresh){
@@ -846,11 +865,16 @@ public class MainActivity extends AppCompatActivity {
             log.append("\n========== D. 全应用操作事件（最近15分钟） ==========\n");
             String events=pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
-            log.append("\n========== E. 其他服务最近原始响应摘要 ==========\n");
+            log.append("\n========== E. 中央气象台天气接口原始 JSON 响应 ==========\n");
+            log.append("HTTP状态码: ").append(prefs.getString("diag_weather_http","暂无")).append("\n");
+            log.append("响应时间: ").append(prefs.getString("diag_weather_at","暂无")).append("\n");
+            log.append("原始响应正文（保留温度、体感温度及预报字段数值）:\n");
+            log.append(prefs.getString("diag_weather_raw","暂无天气接口原始响应。请打开天气页面并成功刷新后重新导出。")).append("\n");
+            log.append("\n========== F. 其他服务最近原始响应摘要 ==========\n");
             for(String key:new String[]{"diag_power_raw","diag_card_raw","diag_hitokoto_raw","diag_auth_status","diag_power_result","diag_card_result"}) log.append(key).append(": ").append(prefs.getString(key,"暂无")).append("\n");
-            log.append("\n========== F. 诊断说明 ==========\n");
-            log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存。\n");
-            log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整 URL。原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查并确认愿意提供。\n");
+            log.append("\n========== G. 诊断说明 ==========\n");
+            log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存；E 部分记录中央气象台接口返回的天气 JSON 原文（最长保存 30000 个字符）。\n");
+            log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整请求 URL。天气 JSON 会保留用于分析的温度数值，但可能包含站点和天气观测信息；原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查。\n");
             try(FileOutputStream os=new FileOutputStream(out)){os.write(log.toString().getBytes(StandardCharsets.UTF_8));}
             Toast.makeText(this,"诊断日志已保存到 Downloads/"+out.getName(),Toast.LENGTH_LONG).show();
         }catch(Exception e){Toast.makeText(this,"日志保存失败："+e.getClass().getSimpleName(),Toast.LENGTH_LONG).show();}
