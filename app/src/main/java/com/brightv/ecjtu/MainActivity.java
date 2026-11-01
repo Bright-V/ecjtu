@@ -46,7 +46,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int BG=Color.rgb(13,30,53), CARD=Color.rgb(26,50,82), BLUE=Color.rgb(45,139,255), MUTED=Color.rgb(157,176,201);
+    private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
     private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
@@ -77,28 +77,38 @@ public class MainActivity extends AppCompatActivity {
     }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
+    // Glassmorphism built from translucent gradients and fine highlights; avoids API-specific backdrop blur.
+    private GradientDrawable glass(int radius){
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.argb(224,42,66,96),Color.argb(196,24,43,68),Color.argb(214,17,33,55)});
+        d.setCornerRadius(dp(radius));d.setStroke(dp(1),Color.argb(82,211,232,255));return d;
+    }
+    private GradientDrawable pageBackground(){
+        return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(15,31,52),Color.rgb(8,17,32),Color.rgb(13,26,45)});
+    }
     private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
     private TextView title(String s,float z){TextView v=t(s,z,Color.WHITE);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private void addSpace(LinearLayout p,int h){Space s=new Space(this);p.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
     private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}
 
     private void buildSetup(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(BG);applyPagePadding(root,dp(28),dp(30),dp(28),dp(30));
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackground(pageBackground());applyPagePadding(root,dp(28),dp(30),dp(28),dp(30));
         TextView mark=title("ECJTUEE",34);mark.setGravity(Gravity.CENTER);root.addView(mark,new LinearLayout.LayoutParams(-1,-2));
         TextView hello=title("欢迎使用",28);hello.setGravity(Gravity.CENTER);hello.setPadding(0,dp(36),0,dp(8));root.addView(hello);
         TextView intro=t("像设置一台新设备一样，只需完成一次校园账号登录。登录状态将由 Android WebView 保存在本机，ECJTUEE 不会保存你的账号密码，也不会上传登录信息。",15,MUTED);intro.setGravity(Gravity.CENTER);root.addView(intro,new LinearLayout.LayoutParams(-1,-2));
         Space flex=new Space(this);root.addView(flex,new LinearLayout.LayoutParams(1,0,1));
         LinearLayout info=card();info.addView(title("设置校园服务",19));info.addView(t("登录后将用于课表、宿舍电费、校园卡等校内服务。后续可直接使用已有的本机登录状态。",14,MUTED));root.addView(info,new LinearLayout.LayoutParams(-1,-2));addSpace(root,18);
-        LinearLayout semester=card();semester.addView(title("开学日期设定",18));semester.addView(t("设置本学期第一周周一的日期，首页将自动显示当前周次。",13,MUTED));Button semesterBtn=new Button(this);semesterBtn.setText(prefs.getString("semesterStart","").length()>0?"已设置："+prefs.getString("semesterStart",""):"设置开学日期");semesterBtn.setAllCaps(false);semesterBtn.setTextColor(Color.WHITE);semesterBtn.setBackground(bg(CARD,12));semesterBtn.setOnClickListener(v->chooseSemesterStart());semester.addView(semesterBtn,new LinearLayout.LayoutParams(-1,dp(50)));root.addView(semester);addSpace(root,18);
-        Button login=new Button(this);login.setText("登录校园账号");login.setAllCaps(false);login.setTextColor(Color.WHITE);login.setTextSize(16);login.setBackground(bg(BLUE,16));login.setOnClickListener(v->{setupInProgress=true;open("首次设置 · 登录",JWXT_OAUTH);});root.addView(login,new LinearLayout.LayoutParams(-1,dp(56)));
+        LinearLayout semester=card();semester.addView(title("开学日期设定",18));semester.addView(t("设置本学期第一周周一的日期，首页将自动显示当前周次。",13,MUTED));Button semesterBtn=new Button(this);semesterBtn.setText(prefs.getString("semesterStart","").length()>0?"已设置："+prefs.getString("semesterStart",""):"设置开学日期");semesterBtn.setAllCaps(false);semesterBtn.setTextColor(Color.WHITE);semesterBtn.setBackground(glass(14));semesterBtn.setOnClickListener(v->chooseSemesterStart());semester.addView(semesterBtn,new LinearLayout.LayoutParams(-1,dp(50)));root.addView(semester);addSpace(root,18);
+        Button login=new Button(this);login.setText("登录校园账号");login.setAllCaps(false);login.setTextColor(Color.WHITE);login.setTextSize(16);login.setBackground(bg(Color.rgb(55,132,230),18));login.setElevation(dp(4));login.setOnClickListener(v->{setupInProgress=true;open("首次设置 · 登录",JWXT_OAUTH);});root.addView(login,new LinearLayout.LayoutParams(-1,dp(56)));
         TextView note=t("继续即表示你将前往学校官方统一身份认证页面。",12,MUTED);note.setGravity(Gravity.CENTER);note.setPadding(0,dp(14),0,0);root.addView(note);
         setContentView(root);
     }
-    private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(16),dp(18),dp(16));c.setBackground(bg(CARD,18));return c;}
-    private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(bg(CARD,14));b.setOnClickListener(v->open(label,url));return b;}
+    private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(16),dp(18),dp(16));c.setBackground(glass(22));c.setElevation(dp(2));return c;}
+    private Button action(String label,String url){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setBackground(glass(16));b.setElevation(dp(2));b.setOnClickListener(v->open(label,url));return b;}
 
     private void buildHome(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);applyPagePadding(root,0,dp(30),0,0);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackground(pageBackground());applyPagePadding(root,0,dp(30),0,0);
         ScrollView scroll=new ScrollView(this);homeView=new LinearLayout(this);homeView.setOrientation(LinearLayout.VERTICAL);homeView.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(homeView); homeRefresh=new SwipeRefreshLayout(this); homeRefresh.addView(scroll); homeRefresh.setOnRefreshListener(this::refreshAllHomeInBackground);
 
         Calendar cal=Calendar.getInstance();int h=cal.get(Calendar.HOUR_OF_DAY);String greet=h<6?"夜深了":h<11?"早上好":h<14?"中午好":h<18?"下午好":"晚上好";int week=getSchoolWeek(cal);String weekText=week>0?"第"+week+"周":"未设置周次";
@@ -110,8 +120,8 @@ public class MainActivity extends AppCompatActivity {
         fetchHitokotoIfNeeded();
         addSpace(homeView,18);
 
-        LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(bg(Color.rgb(29,47,72),24));
-        LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
+        LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(glass(26));schedule.setElevation(dp(3));
+        LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
         boolean showMultiDay=prefs.getBoolean("showMultiDaySchedule",true);
         if(showMultiDay){
@@ -142,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
         quick.addView(action("智慧教务",JWXT_OAUTH),new LinearLayout.LayoutParams(0,dp(58),1));homeView.addView(quick);addSpace(homeView,10);
         homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
 
-        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackgroundColor(Color.rgb(18,39,66));
+        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackground(glass(24));nav.setElevation(dp(8));nav.setClipToOutline(true);
         Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",false);
         n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->buildSettings());
         nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
@@ -153,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
     private int dayOfWeekIndex(Calendar date){int d=date.get(Calendar.DAY_OF_WEEK);return d==Calendar.SUNDAY?6:d-2;}
     private String relativeDayLabel(int offset){if(offset==0)return "今天";if(offset==1)return "明天";if(offset==2)return "后天";if(offset==-1)return "昨天";if(offset==-2)return "前天";return offset>0?offset+"天后":(-offset)+"天前";}
     private Calendar scheduleDateAt(int index){Calendar d=Calendar.getInstance();d.set(Calendar.HOUR_OF_DAY,0);d.set(Calendar.MINUTE,0);d.set(Calendar.SECOND,0);d.set(Calendar.MILLISECOND,0);d.add(Calendar.DAY_OF_MONTH,index-15);return d;}
-    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(bg(i==selectedScheduleIndex?BLUE:Color.TRANSPARENT,15));b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);renderScheduleTimeline(value);}
+    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(i==selectedScheduleIndex?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);renderScheduleTimeline(value);}
         private void renderScheduleTimeline(String value){
         if(scheduleTimeline==null)return;
         scheduleTimeline.removeAllViews();
@@ -177,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
             TextView dot=t("●",12,BLUE);dot.setGravity(Gravity.CENTER);dot.setPadding(0,0,0,dp(3));periodColumn.addView(dot);
             TextView periodText=t(period.isEmpty()?"课程":"第"+period.replace("-", "–")+"节",11,MUTED);periodText.setGravity(Gravity.CENTER);periodText.setPadding(0,dp(2),0,0);periodColumn.addView(periodText);
             row.addView(periodColumn,new LinearLayout.LayoutParams(dp(66),-2));
-            LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(15),dp(13),dp(15),dp(13));card.setBackground(bg(Color.rgb(39,59,86),16));
+            LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);card.setPadding(dp(15),dp(13),dp(15),dp(13));card.setBackground(glass(18));card.setElevation(dp(1));
             TextView title=t(course,16,Color.WHITE);title.setTypeface(null,Typeface.BOLD);title.setLineSpacing(dp(2),1.0f);card.addView(title);
             if(!teacher.isEmpty()){TextView tv=t(teacher,13,Color.rgb(174,192,216));tv.setPadding(0,dp(5),0,0);card.addView(tv);}
             if(!room.isEmpty()){TextView rv=t(room,13,Color.rgb(174,192,216));rv.setPadding(0,dp(2),0,0);card.addView(rv);}
@@ -310,7 +320,7 @@ public class MainActivity extends AppCompatActivity {
         semester.addView(t("开学日期："+(semesterStart.isEmpty()?"未设置":semesterStart)+"\n"+weekSummary,13,MUTED));
         Button semesterButton=new Button(this);
         semesterButton.setText(semesterStart.isEmpty()?"设置开学日期":"修改开学日期");
-        semesterButton.setAllCaps(false);semesterButton.setTextColor(Color.WHITE);semesterButton.setBackground(bg(CARD,12));
+        semesterButton.setAllCaps(false);semesterButton.setTextColor(Color.WHITE);semesterButton.setBackground(glass(14));
         semesterButton.setOnClickListener(v->chooseSemesterStart());
         semester.addView(semesterButton,new LinearLayout.LayoutParams(-1,dp(48)));
         content.addView(semester);addSpace(content,12);
@@ -476,10 +486,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private LinearLayout accountCard(String label,String value,String hint,String url){LinearLayout c=card();c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);c.addView(t(hint,13,Color.rgb(85,157,255)));return c;}
-    private Button navButton(String s,boolean active){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(active?BLUE:MUTED);b.setBackgroundColor(Color.TRANSPARENT);return b;}
+    private Button navButton(String s,boolean active){Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(14);b.setTextColor(active?Color.rgb(129,190,255):MUTED);b.setBackground(active?bg(Color.argb(54,92,165,255),16):bg(Color.TRANSPARENT,16));b.setMinHeight(dp(56));return b;}
 
-    @SuppressLint("SetJavaScriptEnabled") private void ensureBrowser(){if(browserView!=null)return;browserView=new LinearLayout(this);browserView.setOrientation(LinearLayout.VERTICAL);browserView.setBackgroundColor(BG);
-        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(4),dp(4),dp(4),dp(4));bar.setBackgroundColor(Color.rgb(18,39,66));
+    @SuppressLint("SetJavaScriptEnabled") private void ensureBrowser(){if(browserView!=null)return;browserView=new LinearLayout(this);browserView.setOrientation(LinearLayout.VERTICAL);browserView.setBackground(pageBackground());
+        LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);bar.setPadding(dp(4),dp(4),dp(4),dp(4));bar.setBackground(glass(20));bar.setElevation(dp(3));
         Button back=navButton("‹",true),home=navButton("首页",true),refresh=navButton("刷新",false);browserTitle=title("",15);browserTitle.setGravity(Gravity.CENTER);
         bar.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));bar.addView(home,new LinearLayout.LayoutParams(dp(72),dp(54)));bar.addView(browserTitle,new LinearLayout.LayoutParams(0,dp(54),1));bar.addView(refresh,new LinearLayout.LayoutParams(dp(72),dp(54)));
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);webView=new WebView(this);WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(webView,true);
