@@ -35,6 +35,8 @@ android {
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     constraints {
         implementation("org.jetbrains.kotlin:kotlin-stdlib:1.8.22")
     }
