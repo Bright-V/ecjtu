@@ -47,7 +47,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false;
+    private LinearLayout homeView,browserView,widgetContainer,widgetEditBar; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -120,6 +120,66 @@ public class MainActivity extends AppCompatActivity {
         fetchHitokotoIfNeeded();
         addSpace(homeView,18);
 
+
+
+
+        widgetEditBar=new LinearLayout(this);widgetEditBar.setGravity(Gravity.CENTER_VERTICAL);widgetEditBar.setVisibility(View.GONE);
+        TextView editHint=t("长按卡片进入编辑，可拖动排序",12,MUTED);widgetEditBar.addView(editHint,new LinearLayout.LayoutParams(0,-2,1));
+        Button addWidget=navButton("＋ 添加",true);addWidget.setOnClickListener(v->showAddWidgetDialog());widgetEditBar.addView(addWidget,new LinearLayout.LayoutParams(dp(96),dp(44)));
+        Button doneWidget=navButton("完成",true);doneWidget.setOnClickListener(v->setWidgetEditing(false));widgetEditBar.addView(doneWidget,new LinearLayout.LayoutParams(dp(76),dp(44)));
+        homeView.addView(widgetEditBar);widgetContainer=new LinearLayout(this);widgetContainer.setOrientation(LinearLayout.VERTICAL);homeView.addView(widgetContainer);renderDashboardWidgets();
+                homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
+
+        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackground(glass(24));nav.setElevation(dp(8));nav.setClipToOutline(true);
+        Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",false);
+        n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->buildSettings());
+        nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
+        root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
+        homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
+    }
+
+
+    private ArrayList<String> getWidgetOrder(){
+        String saved=prefs.getString("home_widget_order","");
+        ArrayList<String> order=new ArrayList<>();
+        if(saved.trim().isEmpty()){order.add("schedule");order.add("power");order.add("card");order.add("spend");return order;}
+        for(String id:saved.split(","))if(Arrays.asList("schedule","power","card","spend").contains(id)&&!order.contains(id))order.add(id);
+        return order;
+    }
+    private void saveWidgetOrder(ArrayList<String> order){prefs.edit().putString("home_widget_order",android.text.TextUtils.join(",",order)).apply();}
+    private void setWidgetEditing(boolean editing){
+        widgetEditing=editing;if(widgetEditBar!=null)widgetEditBar.setVisibility(editing?View.VISIBLE:View.GONE);
+        if(widgetContainer!=null)for(int i=0;i<widgetContainer.getChildCount();i++){View v=widgetContainer.getChildAt(i);View remove=v.findViewWithTag("widget_remove");if(remove!=null)remove.setVisibility(editing?View.VISIBLE:View.GONE);v.setAlpha(editing?0.94f:1f);}
+    }
+    private void showAddWidgetDialog(){
+        ArrayList<String> order=getWidgetOrder(),missing=new ArrayList<>(),labels=new ArrayList<>();
+        String[] ids={"schedule","power","card","spend"},names={"课表","宿舍剩余电费","校园卡余额","本月支出"};
+        for(int i=0;i<ids.length;i++)if(!order.contains(ids[i])){missing.add(ids[i]);labels.add(names[i]);}
+        if(missing.isEmpty()){Toast.makeText(this,"所有小组件都已添加",Toast.LENGTH_SHORT).show();return;}
+        new AlertDialog.Builder(this).setTitle("添加小组件").setItems(labels.toArray(new String[0]),(d,w)->{order.add(missing.get(w));saveWidgetOrder(order);renderDashboardWidgets();setWidgetEditing(true);}).setNegativeButton("取消",null).show();
+    }
+    private void renderDashboardWidgets(){
+        if(widgetContainer==null)return;widgetContainer.removeAllViews();ArrayList<String> order=getWidgetOrder();
+        for(String id:order){
+            View content;
+            if("schedule".equals(id))content=createScheduleWidget();
+            else if("power".equals(id))content=createAccountWidget("⚡  宿舍剩余电费",prefs.getString("power","未同步"),"点击进入宿舍电费","https://billsys.ecjtu.edu.cn/student/#/");
+            else if("card".equals(id))content=createAccountWidget("▣  校园卡余额",prefs.getString("card","未同步"),"消费 / 充值","https://ecard.ecjtu.edu.cn/");
+            else content=createAccountWidget("▥  本月支出",prefs.getString("spend","未同步"),"校园卡消费汇总","https://ecard.ecjtu.edu.cn/");
+            android.widget.FrameLayout frame=new android.widget.FrameLayout(this);frame.setTag(id);frame.addView(content,new android.widget.FrameLayout.LayoutParams(-1,-2));
+            TextView remove=title("×",20);remove.setTag("widget_remove");remove.setGravity(Gravity.CENTER);remove.setBackground(bg(Color.argb(230,205,69,79),18));android.widget.FrameLayout.LayoutParams rp=new android.widget.FrameLayout.LayoutParams(dp(34),dp(34),Gravity.RIGHT|Gravity.TOP);rp.setMargins(0,dp(6),dp(6),0);frame.addView(remove,rp);
+            remove.setOnClickListener(v->{ArrayList<String> current=getWidgetOrder();current.remove(id);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);});remove.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
+            frame.setOnLongClickListener(v->{setWidgetEditing(true);android.content.ClipData data=android.content.ClipData.newPlainText("home-widget",id);v.startDragAndDrop(data,new View.DragShadowBuilder(v),id,0);return true;});
+            frame.setOnDragListener((v,event)->{if(event.getAction()==android.view.DragEvent.ACTION_DROP){String from=String.valueOf(event.getLocalState()),to=String.valueOf(v.getTag());ArrayList<String> current=getWidgetOrder();int fi=current.indexOf(from),ti=current.indexOf(to);if(fi>=0&&ti>=0&&fi!=ti){current.remove(fi);current.add(ti,from);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);}return true;}return true;});
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(16);widgetContainer.addView(frame,lp);
+        }
+        if(order.isEmpty()){TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(28),0,dp(28));widgetContainer.addView(empty);}
+    }
+    private LinearLayout createAccountWidget(String label,String value,String hint,String url){
+        LinearLayout c=card();c.setMinimumHeight(dp(132));c.setClickable(true);c.setFocusable(true);c.setOnClickListener(v->open(label,url));c.addView(t(label,15,Color.WHITE));TextView val=title(value,24);val.setPadding(dp(4),dp(12),dp(4),0);c.addView(val);c.addView(t(hint,13,Color.rgb(85,157,255)));return c;
+    }
+
+    private LinearLayout createScheduleWidget(){
         LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(glass(26));schedule.setElevation(dp(3));
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
@@ -133,31 +193,8 @@ public class MainActivity extends AppCompatActivity {
             scheduleDateLabel.setText("今天 · "+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(new Date()));
             scheduleValue=title(cachedSchedule,17);scheduleValue.setLineSpacing(dp(3),1.05f);schedule.addView(scheduleValue);
         }
-        homeView.addView(schedule);addSpace(homeView,20);
-
-
-        LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout power=card(); power.setClickable(true); power.setFocusable(true); power.setOnClickListener(v->open("宿舍电费","https://billsys.ecjtu.edu.cn/student/#/"));
-        power.addView(t("⚡  宿舍剩余电费",15,Color.WHITE)); powerValue=title(prefs.getString("power","未同步"),24); powerValue.setPadding(dp(4),dp(12),dp(4),0); power.addView(powerValue);
-        power.addView(t("点击进入宿舍电费",13,Color.rgb(85,157,255)));
-        homeView.addView(power,new LinearLayout.LayoutParams(-1,dp(150)));addSpace(homeView,20);
-        row.addView(power,new LinearLayout.LayoutParams(0,dp(150),1));Space gap=new Space(this);row.addView(gap,new LinearLayout.LayoutParams(dp(10),1));row.addView(money,new LinearLayout.LayoutParams(0,dp(150),1));homeView.addView(row);addSpace(homeView,10);
-
-        homeView.addView(title("快捷功能",20));addSpace(homeView,8);
-        LinearLayout quick=new LinearLayout(this);quick.setOrientation(LinearLayout.HORIZONTAL);
-        quick.addView(action("校园码","https://xymjxt.ecjtu.edu.cn/"),new LinearLayout.LayoutParams(0,dp(58),1));
-        Space qg=new Space(this);quick.addView(qg,new LinearLayout.LayoutParams(dp(10),1));
-        quick.addView(action("智慧教务",JWXT_OAUTH),new LinearLayout.LayoutParams(0,dp(58),1));homeView.addView(quick);addSpace(homeView,10);
-        homeView.addView(t("\n登录信息仅保存在本机 WebView Cookie 和应用本地偏好中，不上传到第三方。",12,MUTED));
-
-        LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(12),dp(6),dp(12),dp(8));nav.setBackground(glass(24));nav.setElevation(dp(8));nav.setClipToOutline(true);
-        Button n1=navButton("⌂\n首页",true),n2=navButton("▦\n功能",false),n3=navButton("⚙\n设置",false);
-        n1.setOnClickListener(v->{});n2.setOnClickListener(v->open("智慧教务",JWXT_OAUTH));n3.setOnClickListener(v->buildSettings());
-        nav.addView(n1,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n2,new LinearLayout.LayoutParams(0,dp(72),1));nav.addView(n3,new LinearLayout.LayoutParams(0,dp(72),1));
-        root.addView(homeRefresh,new LinearLayout.LayoutParams(-1,0,1));root.addView(nav);setContentView(root);
-        homeRefresh.post(()->{if(!backgroundRefreshing){homeRefresh.setRefreshing(true);refreshAllHomeInBackground();}});
+        return schedule;
     }
-
     private int dayOfWeekIndex(Calendar date){int d=date.get(Calendar.DAY_OF_WEEK);return d==Calendar.SUNDAY?6:d-2;}
     private String relativeDayLabel(int offset){if(offset==0)return "今天";if(offset==1)return "明天";if(offset==2)return "后天";if(offset==-1)return "昨天";if(offset==-2)return "前天";return offset>0?offset+"天后":(-offset)+"天前";}
     private Calendar scheduleDateAt(int index){Calendar d=Calendar.getInstance();d.set(Calendar.HOUR_OF_DAY,0);d.set(Calendar.MINUTE,0);d.set(Calendar.SECOND,0);d.set(Calendar.MILLISECOND,0);d.add(Calendar.DAY_OF_MONTH,index-15);return d;}
