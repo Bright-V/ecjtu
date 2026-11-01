@@ -115,7 +115,16 @@ public class MainActivity extends AppCompatActivity {
     private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
     private TextView title(String s,float z){TextView v=t(s,z,Color.WHITE);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private void addSpace(LinearLayout p,int h){Space s=new Space(this);p.addView(s,new LinearLayout.LayoutParams(1,dp(h)));}
-    private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}\n    private void applySystemBarInsets(View root){\n        final int baseLeft=root.getPaddingLeft(),baseTop=root.getPaddingTop(),baseRight=root.getPaddingRight(),baseBottom=root.getPaddingBottom();\n        ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets)->{\n            androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());\n            view.setPadding(baseLeft+bars.left,baseTop+bars.top,baseRight+bars.right,baseBottom+bars.bottom);\n            return insets;\n        });\n        ViewCompat.requestApplyInsets(root);\n    }
+    private void applyPagePadding(View root,int left,int top,int right,int bottom){root.setPadding(left,top,right,bottom);}
+    private void applySystemBarInsets(View root){
+        final int baseLeft=root.getPaddingLeft(),baseTop=root.getPaddingTop(),baseRight=root.getPaddingRight(),baseBottom=root.getPaddingBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(root,(view,insets)->{
+            androidx.core.graphics.Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars()|WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(baseLeft+bars.left,baseTop+bars.top,baseRight+bars.right,baseBottom+bars.bottom);
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(root);
+    }
 
     private void buildSetup(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackground(pageBackground());applyPagePadding(root,dp(28),dp(30),dp(28),dp(30));
