@@ -53,6 +53,28 @@ public class MainActivity extends AppCompatActivity {
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
 
     @Override public void onCreate(Bundle b){super.onCreate(b);WindowCompat.setDecorFitsSystemWindows(getWindow(),true);getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(Color.rgb(18,39,66));CookieManager.getInstance().setAcceptCookie(true);CookieManager.getInstance().flush();prefs=getSharedPreferences("local_session",MODE_PRIVATE);if(prefs.getBoolean("setupComplete",false))buildHome();else buildSetup();getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){public void handleOnBackPressed(){if(browserView!=null&&browserView.getVisibility()==View.VISIBLE){if(webView.canGoBack())webView.goBack();else showHome();}else finish();}});}
+    private void diagnostic(String module,String stage,String status,String detail){
+        try{
+            String safe=detail==null?"":detail.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
+            safe=safe.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
+            String line=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS",Locale.US).format(new Date())+" ["+module+"] "+stage+" | "+status+" | "+safe.replace("\r"," ").replace("\n","\\n");
+            String old=prefs.getString("diag_events","");
+            String[] rows=old.isEmpty()?new String[0]:old.split("\n");
+            StringBuilder all=new StringBuilder();
+            int start=Math.max(0,rows.length-119);
+            for(int i=start;i<rows.length;i++)all.append(rows[i]).append("\n");
+            all.append(line).append("\n");
+            prefs.edit().putString("diag_events",all.toString()).apply();
+        }catch(Exception ignored){}
+    }
+    private String diagnosticText(String raw,int max){
+        if(raw==null)return "";
+        String value=raw.replace("\r","");
+        value=value.replaceAll("(?i)(cookie|set-cookie|authorization|token|password|passwd|验证码|密码|access_token|refresh_token)(\\s*[:=：]\\s*)[^\\s,;]+","$1$2[已脱敏]");
+        value=value.replaceAll("\\b\\d{10,}\\b","[长数字已脱敏]");
+        if(value.length()>max)value=value.substring(0,max)+"\n…（内容已截断）";
+        return value;
+    }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
     private GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
     private TextView t(String s,float z,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(color);v.setPadding(dp(4),dp(5),dp(4),dp(5));return v;}
@@ -382,7 +404,12 @@ public class MainActivity extends AppCompatActivity {
             String packed=prefs.getString("scheduleDays","");
             if(packed.isEmpty())log.append("暂无缓存。\n");
             else{String[] cached=packed.split(String.valueOf((char)30),-1);for(int i=0;i<cached.length;i++){Calendar d=(Calendar)Calendar.getInstance().clone();d.add(Calendar.DAY_OF_MONTH,i-15);log.append(new SimpleDateFormat("yyyy-MM-dd EEE",Locale.CHINA).format(d.getTime())).append(": ").append(cached[i].replace("\n"," | ")).append("\n");}}
-            log.append("\n========== D. 诊断说明 ==========\n");
+            log.append("\n========== D. 全应用操作事件（最近120条） ==========\n");
+            String events=prefs.getString("diag_events","");
+            log.append(events.isEmpty()?"暂无事件记录。\n":events);
+            log.append("\n========== E. 其他服务最近原始响应摘要 ==========\n");
+            for(String key:new String[]{"diag_power_raw","diag_card_raw","diag_hitokoto_raw","diag_auth_status","diag_power_result","diag_card_result"}) log.append(key).append(": ").append(prefs.getString(key,"暂无")).append("\n");
+            log.append("\n========== F. 诊断说明 ==========\n");
             log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存。\n");
             log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整 URL。原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查并确认愿意提供。\n");
             try(FileOutputStream os=new FileOutputStream(out)){os.write(log.toString().getBytes(StandardCharsets.UTF_8));}
@@ -413,8 +440,10 @@ public class MainActivity extends AppCompatActivity {
                     v.evaluateJavascript(js,x->{
                         if(finished[0])return;
                         boolean ok=isRefreshPayloadValid(x,type);
+                        String module=type==0?"教务课表":type==1?"宿舍电费":"校园卡";String payload=jsClean(x);
+                        diagnostic(module,"页面数据抓取",ok?"成功":"失败","返回长度="+payload.length()+"；摘要="+diagnosticText(payload,1800));
                         if(type==0&&!ok){String failed=jsClean(x);lastJwxtCaptureStatus="抓取失败或未识别到课表表格；页面可能未登录、未加载完成或表格结构变化";lastJwxtCaptureAt=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());lastJwxtRawData="原始返回内容（截取前3000字符）:\n"+failed.substring(0,Math.min(3000,failed.length()));}
-                        if(ok)parseSync(x,type==0,type==1,type==2);
+                        if(ok)parseSync(x,type==0,type==1,type==2);else diagnostic(module,"数据校验","失败","未找到预期数据标记或关键字段");
                         finished[0]=true;try{v.stopLoading();v.destroy();}catch(Exception ignored){}
                         finishBackgroundRefresh(ok);
                     });
@@ -436,6 +465,7 @@ public class MainActivity extends AppCompatActivity {
         if(backgroundRefreshPending==0){
             backgroundRefreshing=false;
             if(homeRefresh!=null)homeRefresh.setRefreshing(false);
+            diagnostic("首页","后台刷新汇总",backgroundRefreshFailures==0?"成功":"部分失败","失败项目数="+backgroundRefreshFailures);
             if(backgroundRefreshFailures>0)Toast.makeText(this,"首页刷新失败：有 "+backgroundRefreshFailures+" 项未能更新，请检查网络或登录状态",Toast.LENGTH_LONG).show();
         }
     }
@@ -448,7 +478,7 @@ public class MainActivity extends AppCompatActivity {
         Button back=navButton("‹",true),home=navButton("首页",true),refresh=navButton("刷新",false);browserTitle=title("",15);browserTitle.setGravity(Gravity.CENTER);
         bar.addView(back,new LinearLayout.LayoutParams(dp(54),dp(54)));bar.addView(home,new LinearLayout.LayoutParams(dp(72),dp(54)));bar.addView(browserTitle,new LinearLayout.LayoutParams(0,dp(54),1));bar.addView(refresh,new LinearLayout.LayoutParams(dp(72),dp(54)));
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);webView=new WebView(this);WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);CookieManager.getInstance().setAcceptThirdPartyCookies(webView,true);
-        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){h.cancel();}@Override public void onPageFinished(WebView v,String u){progress.setVisibility(View.GONE);CookieManager.getInstance().flush();captureSchedule(v,u);syncFromPage(v,u);if(setupInProgress&&u!=null&&u.contains("jwxt.ecjtu.edu.cn/index.action")){browserTitle.setText("首次设置 · 正在配置");new android.os.Handler().postDelayed(()->webView.loadUrl(BILLSYS_OAUTH),500);return;}if(setupInProgress&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){setupInProgress=false;prefs.edit().putBoolean("setupComplete",true).putBoolean("billsysLogged",true).apply();Toast.makeText(MainActivity.this,"设置完成",Toast.LENGTH_SHORT).show();new android.os.Handler().postDelayed(()->showHome(),700);return;}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
+        webView.setWebViewClient(new WebViewClient(){@Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest r){Uri u=r.getUrl();String host=u.getHost();if(host==null)return true;boolean ok=allowed.contains(host)||host.endsWith(".ecjtu.edu.cn");return !ok;}@Override public void onReceivedSslError(WebView v,SslErrorHandler h,SslError e){diagnostic("WebView","SSL错误","失败","主机="+(e.getUrl()==null?"未知":Uri.parse(e.getUrl()).getHost())+"；错误码="+e.getPrimaryError());h.cancel();}@Override public void onReceivedError(WebView v,WebResourceRequest r,WebResourceError e){if(r.isForMainFrame())diagnostic("WebView","页面加载","失败","主机="+r.getUrl().getHost()+"；错误码="+e.getErrorCode()+"；描述="+e.getDescription());}@Override public void onReceivedHttpError(WebView v,WebResourceRequest r,WebResourceResponse e){if(r.isForMainFrame())diagnostic("WebView","HTTP响应",e.getStatusCode()<400?"成功":"失败","主机="+r.getUrl().getHost()+"；状态码="+e.getStatusCode());}@Override public void onPageStarted(WebView v,String u,android.graphics.Bitmap icon){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面开始加载","开始","主机="+host);}@Override public void onPageFinished(WebView v,String u){String host=u==null?"未知":Uri.parse(u).getHost();diagnostic("WebView","页面加载完成","成功","主机="+host+"；标题="+v.getTitle());progress.setVisibility(View.GONE);CookieManager.getInstance().flush();captureSchedule(v,u);syncFromPage(v,u);if(setupInProgress&&u!=null&&u.contains("jwxt.ecjtu.edu.cn/index.action")){browserTitle.setText("首次设置 · 正在配置");new android.os.Handler().postDelayed(()->webView.loadUrl(BILLSYS_OAUTH),500);return;}if(setupInProgress&&u!=null&&u.contains("billsys.ecjtu.edu.cn/student/")){setupInProgress=false;prefs.edit().putBoolean("setupComplete",true).putBoolean("billsysLogged",true).apply();Toast.makeText(MainActivity.this,"设置完成",Toast.LENGTH_SHORT).show();new android.os.Handler().postDelayed(()->showHome(),700);return;}boolean loggedPage=u!=null&&(u.contains("jwxt.ecjtu.edu.cn/index.action")||u.contains("ecard.ecjtu.edu.cn/"));if(loggedPage&&returnAfterLogin){returnAfterLogin=false;new android.os.Handler().postDelayed(()->showHome(),900);}}});
         webView.setWebChromeClient(new WebChromeClient(){@Override public void onProgressChanged(WebView v,int p){progress.setVisibility(p<100?View.VISIBLE:View.GONE);progress.setProgress(p);}});
         back.setOnClickListener(v->{if(webView.canGoBack())webView.goBack();else showHome();});home.setOnClickListener(v->showHome());refresh.setOnClickListener(v->webView.reload());
         browserView.addView(bar);browserView.addView(progress,new LinearLayout.LayoutParams(-1,dp(3)));browserView.addView(webView,new LinearLayout.LayoutParams(-1,0,1));}
@@ -475,7 +505,7 @@ public class MainActivity extends AppCompatActivity {
          if(jw) js="(function(){var t=document.getElementById('courseSche');if(!t)return 'JWCAP|';var rows=t.querySelectorAll('tr'),days=[[],[],[],[],[],[],[]];function blocks(cell){var box=cell;for(var n=0;n<6&&box.children&&box.children.length===1;n++)box=box.children[0];var kids=box.children;if(kids&&kids.length>1){var out=[];for(var k=0;k<kids.length;k++){var tx=(kids[k].innerText||kids[k].textContent||'').replace(/\\r/g,'').trim();if(tx)out.push(tx);}if(out.length>1)return out;}var raw=(cell.innerText||cell.textContent||'').replace(/\\r/g,'').trim();return raw?[raw]:[];}for(var r=1;r<rows.length;r++){var c=rows[r].querySelectorAll('th,td');var slot=c.length?(c[0].innerText||'').trim():'';if(!/^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)$/.test(slot))continue;for(var d=1;d<=7;d++){if(c.length<=d)continue;var parts=blocks(c[d]);for(var q=0;q<parts.length;q++){var val=parts[q];if(val&&val!=='-'&&val!=='无')days[d-1].push(slot+'\\t'+val);}}}return 'JWCAP7|'+days.map(function(a){return encodeURIComponent(a.join('\\n'));}).join('|');})()";
         else if(bill) js="(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
         else js="(function(){return 'CARDCAP|'+(document.body?document.body.innerText:'').slice(0,5000);})()";
-        v.evaluateJavascript(js,value->{parseSync(value,jw,bill,card);});
+        v.evaluateJavascript(js,value->{String module=jw?"教务课表":bill?"宿舍电费":"校园卡";String payload=jsClean(value);diagnostic(module,"前台页面抓取","完成","返回长度="+payload.length()+"；摘要="+diagnosticText(payload,1500));parseSync(value,jw,bill,card);});
     }
     private String jsClean(String s){if(s==null)return "";if(s.length()>=2&&s.charAt(0)=='"'&&s.charAt(s.length()-1)=='"')s=s.substring(1,s.length()-1);return s.replace("\\n"," ").replace("\\\"","\"");}
     private void parseSync(String raw,boolean jw,boolean bill,boolean card){
