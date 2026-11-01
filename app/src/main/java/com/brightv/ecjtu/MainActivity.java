@@ -56,7 +56,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -184,78 +184,95 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this).setTitle("添加小组件").setItems(labels.toArray(new String[0]),(d,w)->{order.add(missing.get(w));saveWidgetOrder(order);renderDashboardWidgets();setWidgetEditing(true);}).setNegativeButton("取消",null).show();
     }
     private void renderDashboardWidgets(){
-        if(widgetContainer==null)return;
-        widgetContainer.removeAllViews();
-        widgetContainer.setColumnCount(4);
-        widgetContainer.setRowCount(GridLayout.UNDEFINED);
-        widgetContainer.setUseDefaultMargins(false);
-        widgetContainer.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
-        ArrayList<String> order=getWidgetOrder();
-        int occupiedColumns=0;
-        for(String id:order){
-            boolean fullWidth="schedule".equals(id);
-            int columnSpan=fullWidth?4:2;
-            int rowSpan=fullWidth?6:2;
-            android.widget.FrameLayout frame=createWidgetFrame(id);
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                    GridLayout.spec(GridLayout.UNDEFINED,rowSpan),
-                    GridLayout.spec(GridLayout.UNDEFINED,columnSpan,1f));
-            lp.width=0;
-            lp.height=0;
-            lp.setMargins(dp(4),dp(4),dp(4),dp(12));
-            frame.setLayoutParams(lp);
-            widgetContainer.addView(frame);
-            frame.post(()->{
-                android.view.ViewGroup.LayoutParams measured=frame.getLayoutParams();
-                if(measured instanceof GridLayout.LayoutParams){
-                    GridLayout.LayoutParams sized=(GridLayout.LayoutParams)measured;
-                    int width=frame.getWidth();
-                    int targetHeight=fullWidth?(width*3)/2:width;
-                    if(width>0&&sized.height!=targetHeight){sized.height=targetHeight;frame.setLayoutParams(sized);}
+        if(widgetContainer==null||renderingDashboardWidgets)return;
+        renderingDashboardWidgets=true;
+        try{
+            widgetContainer.removeAllViews();
+            widgetContainer.setColumnCount(4);
+            widgetContainer.setUseDefaultMargins(false);
+            widgetContainer.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+            ArrayList<String> order=getWidgetOrder();
+            boolean[][] occupied=new boolean[64][4];
+            int maxRow=8;
+            for(String id:order){
+                boolean fullWidth="schedule".equals(id);
+                int columnSpan=fullWidth?4:2;
+                int rowSpan=fullWidth?getScheduleWidgetRows():2;
+                int row=-1,col=-1;
+                search:
+                for(int r=0;r<64;r++){
+                    for(int x=0;x<=4-columnSpan;x+=2){
+                        boolean fits=true;
+                        for(int yy=r;yy<r+rowSpan&&yy<64&&fits;yy++)
+                            for(int xx=x;xx<x+columnSpan;xx++)if(occupied[yy][xx]){fits=false;break;}
+                        if(fits){row=r;col=x;break search;}
+                    }
                 }
-            });
-            occupiedColumns+=columnSpan;
+                if(row<0)continue;
+                for(int yy=row;yy<row+rowSpan&&yy<64;yy++)
+                    for(int xx=col;xx<col+columnSpan;xx++)occupied[yy][xx]=true;
+                maxRow=Math.max(maxRow,row+rowSpan);
+                android.widget.FrameLayout frame=createWidgetFrame(id);
+                GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
+                        GridLayout.spec(row,rowSpan),
+                        GridLayout.spec(col,columnSpan,1f));
+                lp.width=0;lp.height=0;
+                lp.setMargins(dp(4),dp(4),dp(4),dp(12));
+                frame.setLayoutParams(lp);
+                widgetContainer.addView(frame);
+                frame.post(()->{
+                    android.view.ViewGroup.LayoutParams measured=frame.getLayoutParams();
+                    if(measured instanceof GridLayout.LayoutParams){
+                        GridLayout.LayoutParams sized=(GridLayout.LayoutParams)measured;
+                        int width=frame.getWidth();
+                        int targetHeight=fullWidth?(width*rowSpan)/4:width;
+                        if(width>0&&sized.height!=targetHeight){sized.height=targetHeight;frame.setLayoutParams(sized);}
+                    }
+                });
+            }
+            // Keep an eight-row base grid; allow extra rows only when all widgets cannot fit.
+            widgetContainer.setRowCount(Math.max(8,maxRow));
+            int dropRow=-1,dropCol=-1;
+            searchDrop:
+            for(int r=0;r<64;r++)for(int x=0;x<=2;x+=2){
+                boolean fits=true;
+                for(int yy=r;yy<r+2&&fits;yy++)for(int xx=x;xx<x+2;xx++)if(occupied[yy][xx]){fits=false;break;}
+                if(fits){dropRow=r;dropCol=x;break searchDrop;}
+            }
+            if(widgetEditing&&dropRow>=0){
+                View target=createWidgetDropTarget(order.size());
+                GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(dropRow,2),GridLayout.spec(dropCol,2,1f));
+                lp.width=0;lp.height=0;lp.setMargins(dp(4),dp(4),dp(4),dp(12));
+                target.setLayoutParams(lp);widgetContainer.addView(target);
+                target.post(()->{int side=target.getWidth();if(side>0&&target.getLayoutParams() instanceof GridLayout.LayoutParams){GridLayout.LayoutParams p=(GridLayout.LayoutParams)target.getLayoutParams();if(p.height!=side){p.height=side;target.setLayoutParams(p);}}});
+                widgetContainer.setRowCount(Math.max(8,dropRow+2));
+            }
+            if(order.isEmpty()){
+                TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);
+                empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(28),0,dp(28));
+                GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(0,2),GridLayout.spec(0,4,1f));
+                lp.width=0;lp.height=dp(100);widgetContainer.addView(empty,lp);
+            }
+        }finally{renderingDashboardWidgets=false;}
+    }
+    private int getScheduleWidgetRows(){
+        int courses=0;
+        if(scheduleTimeline!=null){
+            for(int i=0;i<scheduleTimeline.getChildCount();i++){
+                View child=scheduleTimeline.getChildAt(i);
+                if(child instanceof LinearLayout && ((LinearLayout)child).getOrientation()==LinearLayout.HORIZONTAL)courses++;
+            }
         }
-        int emptyColumns=(4-(occupiedColumns%4))%4;
-        for(int i=0;i<emptyColumns;i+=2){
-            widgetContainer.addView(createWidgetDropTarget(order.size()+i/2));
-        }
-        if(order.isEmpty()){
-            TextView empty=t("还没有小组件，点击“添加”开始布置首页。",14,MUTED);
-            empty.setGravity(Gravity.CENTER);
-            empty.setPadding(0,dp(28),0,dp(28));
-            GridLayout.LayoutParams lp=new GridLayout.LayoutParams(GridLayout.spec(0,1f),GridLayout.spec(0,4,1f));
-            lp.width=0;lp.height=dp(100);widgetContainer.addView(empty,lp);
-        }
+        return Math.max(3,Math.min(5,courses));
     }
     private View createWidgetDropTarget(int targetIndex){
         android.widget.FrameLayout target=new android.widget.FrameLayout(this);
         target.setTag("widget_drop_target");target.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
         target.setBackground(bg(Color.argb(38,125,177,235),18));
         TextView plus=t("＋",28,MUTED);plus.setGravity(Gravity.CENTER);target.addView(plus,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        GridLayout.LayoutParams lp=new GridLayout.LayoutParams(
-                GridLayout.spec(GridLayout.UNDEFINED,2),
-                GridLayout.spec(GridLayout.UNDEFINED,2,1f));
-        lp.width=0;lp.height=0;lp.setMargins(dp(4),dp(4),dp(4),dp(12));
-        target.setLayoutParams(lp);
-        target.post(()->{
-            android.view.ViewGroup.LayoutParams measured=target.getLayoutParams();
-            if(measured instanceof GridLayout.LayoutParams){
-                GridLayout.LayoutParams square=(GridLayout.LayoutParams)measured;
-                int side=target.getWidth();
-                if(side>0&&square.height!=side){square.height=side;target.setLayoutParams(square);}
-            }
-        });
         target.setOnDragListener((v,event)->{
-            if(event.getAction()==android.view.DragEvent.ACTION_DROP){
-                String from=String.valueOf(event.getLocalState());
-                moveWidgetToIndex(from,targetIndex);
-                return true;
-            }
-            return event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED||
-                    event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED||
-                    event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||
-                    event.getAction()==android.view.DragEvent.ACTION_DRAG_LOCATION;
+            if(event.getAction()==android.view.DragEvent.ACTION_DROP){String from=String.valueOf(event.getLocalState());moveWidgetToIndex(from,targetIndex);return true;}
+            return event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED||event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED||event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||event.getAction()==android.view.DragEvent.ACTION_DRAG_LOCATION;
         });
         return target;
     }
@@ -283,7 +300,7 @@ public class MainActivity extends AppCompatActivity {
         if("schedule".equals(id))content.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));
         TextView remove=title("×",20);remove.setTag("widget_remove");remove.setGravity(Gravity.CENTER);remove.setBackground(bg(Color.argb(230,205,69,79),18));
         android.widget.FrameLayout.LayoutParams rp=new android.widget.FrameLayout.LayoutParams(dp(34),dp(34),Gravity.RIGHT|Gravity.TOP);rp.setMargins(0,dp(6),dp(6),0);frame.addView(remove,rp);
-        remove.setOnClickListener(v->{ArrayList<String> current=getWidgetOrder();current.remove(id);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);});remove.setVisibility(widgetEditing?View.VISIBLE:View.GONE);
+        remove.setClickable(true);remove.setFocusable(true);remove.setElevation(dp(24));remove.setOnClickListener(v->{v.setEnabled(false);ArrayList<String> current=getWidgetOrder();current.remove(id);saveWidgetOrder(current);renderDashboardWidgets();setWidgetEditing(true);});remove.setVisibility(widgetEditing?View.VISIBLE:View.GONE);remove.bringToFront();remove.post(remove::bringToFront);
         frame.setOnDragListener((v,event)->{if(event.getAction()==android.view.DragEvent.ACTION_DROP){String from=String.valueOf(event.getLocalState()),to=String.valueOf(v.getTag());if(!from.equals(to))moveWidgetToIndex(from,getWidgetOrder().indexOf(to));return true;}return event.getAction()==android.view.DragEvent.ACTION_DRAG_STARTED||event.getAction()==android.view.DragEvent.ACTION_DRAG_ENTERED||event.getAction()==android.view.DragEvent.ACTION_DRAG_EXITED||event.getAction()==android.view.DragEvent.ACTION_DRAG_LOCATION;});return frame;
     }
     private LinearLayout createAccountWidget(String label,String value,String hint,String url){
@@ -397,7 +414,7 @@ public class MainActivity extends AppCompatActivity {
         boolean showMultiDay=prefs.getBoolean("showMultiDaySchedule",true);
         if(showMultiDay){
             scheduleDayScroll=new HorizontalScrollView(this);scheduleDayScroll.setHorizontalScrollBarEnabled(false);scheduleDayScroll.setFillViewport(false);scheduleDayStrip=new LinearLayout(this);scheduleDayStrip.setOrientation(LinearLayout.HORIZONTAL);scheduleDayScroll.addView(scheduleDayStrip);LinearLayout.LayoutParams dayLp=new LinearLayout.LayoutParams(-1,dp(70));dayLp.topMargin=dp(12);dayLp.bottomMargin=dp(8);scheduleContent.addView(scheduleDayScroll,dayLp);
-            selectedScheduleIndex=15;String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
+            String cachedDays=prefs.getString("scheduleDays","");if(!cachedDays.isEmpty()){String[] a=cachedDays.split(String.valueOf((char)30),-1);if(a.length==31)scheduleDays=a;else if(a.length==7){Calendar base=Calendar.getInstance();for(int i=0;i<31;i++){Calendar d=(Calendar)base.clone();d.add(Calendar.DAY_OF_MONTH,i-15);scheduleDays[i]=a[dayOfWeekIndex(d)];}}}
             scheduleValue=title("",17);scheduleValue.setVisibility(View.GONE);scheduleTimeline=new LinearLayout(this);scheduleTimeline.setOrientation(LinearLayout.VERTICAL);LinearLayout.LayoutParams timelineLp=new LinearLayout.LayoutParams(-1,-2);timelineLp.topMargin=dp(5);scheduleContent.addView(scheduleTimeline,timelineLp);scheduleContent.addView(t("左右滑动日期条或课程卡片，查看前后 15 天。",13,MUTED));renderScheduleDayStrip();updateScheduleDayDisplay();
             scheduleTimeline.setOnTouchListener(new View.OnTouchListener(){float downX,downY;public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==android.view.MotionEvent.ACTION_DOWN){downX=e.getX();downY=e.getY();}else if(e.getAction()==android.view.MotionEvent.ACTION_UP){float dx=e.getX()-downX,dy=e.getY()-downY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy))selectScheduleDay(selectedScheduleIndex+(dx<0?1:-1));}return true;}});
         }else{
@@ -409,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
     private int dayOfWeekIndex(Calendar date){int d=date.get(Calendar.DAY_OF_WEEK);return d==Calendar.SUNDAY?6:d-2;}
     private String relativeDayLabel(int offset){if(offset==0)return "今天";if(offset==1)return "明天";if(offset==2)return "后天";if(offset==-1)return "昨天";if(offset==-2)return "前天";return offset>0?offset+"天后":(-offset)+"天前";}
     private Calendar scheduleDateAt(int index){Calendar d=Calendar.getInstance();d.set(Calendar.HOUR_OF_DAY,0);d.set(Calendar.MINUTE,0);d.set(Calendar.SECOND,0);d.set(Calendar.MILLISECOND,0);d.add(Calendar.DAY_OF_MONTH,index-15);return d;}
-    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(i==selectedScheduleIndex?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);renderScheduleTimeline(value);}
+    private void renderScheduleDayStrip(){if(scheduleDayStrip==null)return;scheduleDayStrip.removeAllViews();for(int i=0;i<31;i++){Calendar d=scheduleDateAt(i);String label=new SimpleDateFormat("d",Locale.CHINA).format(d.getTime())+"\n"+new SimpleDateFormat("EE",Locale.CHINA).format(d.getTime());TextView b=new TextView(this);b.setText(label);b.setGravity(Gravity.CENTER);b.setTextSize(13);b.setTypeface(null,i==selectedScheduleIndex?Typeface.BOLD:Typeface.NORMAL);b.setTextColor(i==selectedScheduleIndex?Color.WHITE:MUTED);b.setBackground(i==selectedScheduleIndex?bg(Color.argb(220,63,139,235),16):bg(Color.argb(34,190,218,255),16));b.setPadding(dp(5),dp(7),dp(5),dp(7));b.setMinWidth(dp(48));b.setMinHeight(dp(62));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(48),dp(62));lp.rightMargin=dp(5);scheduleDayStrip.addView(b,lp);final int index=i;b.setOnClickListener(v->selectScheduleDay(index));}if(scheduleDayScroll!=null)scheduleDayScroll.post(()->{View selected=scheduleDayStrip.getChildAt(selectedScheduleIndex);if(selected!=null)scheduleDayScroll.smoothScrollTo(Math.max(0,selected.getLeft()-(scheduleDayScroll.getWidth()-selected.getWidth())/2),0);});}private void updateScheduleDayDisplay(){if(scheduleDateLabel==null||scheduleValue==null)return;Calendar d=scheduleDateAt(selectedScheduleIndex);int offset=selectedScheduleIndex-15;scheduleDateLabel.setText(relativeDayLabel(offset)+"\n"+new SimpleDateFormat("M月d日 EEEE",Locale.CHINA).format(d.getTime()));scheduleDateLabel.setLineSpacing(dp(2),1.0f);String value=scheduleDays[selectedScheduleIndex];if(value==null||value.isEmpty())value=offset==0?prefs.getString("schedule","尚未同步课表"):"暂无课程";scheduleValue.setText(value);renderScheduleTimeline(value);if(widgetContainer!=null&&!renderingDashboardWidgets)renderDashboardWidgets();}
         private void renderScheduleTimeline(String value){
         if(scheduleTimeline==null)return;
         scheduleTimeline.removeAllViews();
