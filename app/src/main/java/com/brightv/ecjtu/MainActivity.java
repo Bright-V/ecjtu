@@ -186,8 +186,8 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
         int p=dp(20);FrameLayout box=new FrameLayout(this);box.setPadding(p,0,p,0);box.addView(input,new FrameLayout.LayoutParams(-1,-2));
         new AlertDialog.Builder(this).setTitle("开学日期设定").setMessage("设置本学期第一周周一的日期，首页会自动计算当前周次。").setView(box).setNegativeButton("取消",null).setPositiveButton("保存",(d,w)->{
             String value=input.getText().toString().trim();
-            try{new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(value);prefs.edit().putString("semesterStart",value).apply();Toast.makeText(this,"开学日期已保存",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,"日期格式应为 YYYY-MM-DD",Toast.LENGTH_SHORT).show();}
-        }).setNeutralButton("清除",(d,w)->{prefs.edit().remove("semesterStart").apply();Toast.makeText(this,"开学日期已清除",Toast.LENGTH_SHORT).show();}).show();
+            try{new SimpleDateFormat("yyyy-MM-dd",Locale.US).parse(value);prefs.edit().putString("semesterStart",value).apply();Toast.makeText(this,"开学日期已保存",Toast.LENGTH_SHORT).show();if(prefs.getBoolean("setupComplete",false))buildSettings();}catch(Exception e){Toast.makeText(this,"日期格式应为 YYYY-MM-DD",Toast.LENGTH_SHORT).show();}
+        }).setNeutralButton("清除",(d,w)->{prefs.edit().remove("semesterStart").apply();Toast.makeText(this,"开学日期已清除",Toast.LENGTH_SHORT).show();if(prefs.getBoolean("setupComplete",false))buildSettings();}).show();
     }
 
     private void fetchHitokotoIfNeeded(){
@@ -225,6 +225,20 @@ private void selectScheduleDay(int index){if(index<0||index>30)return;selectedSc
         Switch multiDaySwitch=new Switch(this);multiDaySwitch.setText("展示多日课表");multiDaySwitch.setTextColor(Color.WHITE);multiDaySwitch.setChecked(prefs.getBoolean("showMultiDaySchedule",true));
         multiDaySwitch.setOnCheckedChangeListener((button,checked)->{prefs.edit().putBoolean("showMultiDaySchedule",checked).apply();Toast.makeText(this,checked?"已开启多日课表":"已切换为仅显示今日课表",Toast.LENGTH_SHORT).show();});
         multiDayRow.addView(multiDaySwitch);multiDay.addView(multiDayRow);content.addView(multiDay);addSpace(content,12);
+
+        LinearLayout semester=card();
+        String semesterStart=prefs.getString("semesterStart","");
+        int currentWeek=getSchoolWeek(Calendar.getInstance());
+        String weekSummary=currentWeek>0?"当前按开学日期计算为第 "+currentWeek+" 周":"尚未设置开学日期，首页暂不显示周次";
+        semester.addView(title("学期周次设置",18));
+        semester.addView(t("设置本学期第一周周一的日期，应用会据此自动计算当前周次。",13,MUTED));
+        semester.addView(t("开学日期："+(semesterStart.isEmpty()?"未设置":semesterStart)+"\n"+weekSummary,13,MUTED));
+        Button semesterButton=new Button(this);
+        semesterButton.setText(semesterStart.isEmpty()?"设置开学日期":"修改开学日期");
+        semesterButton.setAllCaps(false);semesterButton.setTextColor(Color.WHITE);semesterButton.setBackground(bg(CARD,12));
+        semesterButton.setOnClickListener(v->chooseSemesterStart());
+        semester.addView(semesterButton,new LinearLayout.LayoutParams(-1,dp(48)));
+        content.addView(semester);addSpace(content,12);
 
         LinearLayout reset=card();reset.setClickable(true);reset.setOnClickListener(v->confirmReset());reset.addView(title("初始化应用",18));reset.addView(t("清除本机登录状态、缓存的首页数据和首次设置状态，然后重新进入欢迎设置。",13,MUTED));content.addView(reset);addSpace(content,12);
         LinearLayout logs=card();logs.setClickable(true);logs.setOnClickListener(v->exportLogs());logs.addView(title("生成并保存日志",18));logs.addView(t("生成诊断日志并保存到手机 Downloads 目录。日志不会包含 Cookie、Token 或账号密码。",13,MUTED));content.addView(logs);addSpace(content,12);
