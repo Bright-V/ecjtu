@@ -57,7 +57,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtHtml=""; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private ScrollView scheduleWidgetScroll; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -547,17 +547,8 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
         }catch(Exception e){diagnostic("天气","中央气象台数据更新","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->{if(weatherData==null)Toast.makeText(this,"天气获取失败："+e.getMessage(),Toast.LENGTH_LONG).show();else Toast.makeText(this,"天气更新失败，正在显示缓存数据",Toast.LENGTH_SHORT).show();});}finally{if(countAsHomeRefresh){boolean ok=refreshOk;runOnUiThread(()->finishBackgroundRefresh(ok));}}}).start();
     }
-    private String validWeatherText(JSONObject object,String key){
-        if(object==null||!object.has(key)||object.isNull(key))return null;
-        String value=String.valueOf(object.opt(key)).trim();
-        if(value.isEmpty()||value.equals("-")||value.equals("--")||value.equalsIgnoreCase("null")||value.equals("9999")||value.equals("9999.0")||value.equals("9999.00")||value.equals("无")||value.equals("暂无")||value.equals("暂无预警"))return null;
-        try{double n=Double.parseDouble(value);if(!Double.isFinite(n)||Math.abs(n)>=9999)return null;}catch(Exception ignored){}
-        return value;
-    }
-    private String validWeatherNumber(JSONObject object,String key,double min,double max){
-        String value=validWeatherText(object,key);if(value==null)return null;
-        try{double n=Double.parseDouble(value);if(!Double.isFinite(n)||n<min||n>max)return null;return String.valueOf(n==(long)n?(long)n:n);}catch(Exception ignored){return null;}
-    }
+    private String validWeatherText(JSONObject object,String key){return WeatherDataValidator.validText(object,key);}
+    private String validWeatherNumber(JSONObject object,String key,double min,double max){return WeatherDataValidator.validNumber(object,key,min,max);}
     private void renderWeatherPage(){
         if(weatherPage==null)return;ScrollView scroll=(ScrollView)weatherPage.getChildAt(1);LinearLayout body=(LinearLayout)scroll.getChildAt(0);body.removeAllViews();
         if(weatherData==null){TextView wait=title("正在连接中央气象台…",20);wait.setPadding(0,dp(45),0,dp(45));body.addView(wait);body.addView(t("首次使用需要定位并匹配附近气象站。",14,MUTED));return;}
@@ -605,7 +596,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout schedule=card();schedule.setTag("schedule");schedule.setPadding(dp(16),dp(16),dp(16),dp(16));schedule.setBackground(glass(26));schedule.setElevation(dp(3));
         LinearLayout sh=new LinearLayout(this);sh.setGravity(Gravity.CENTER_VERTICAL);scheduleDateLabel=title("",19);sh.addView(scheduleDateLabel,new LinearLayout.LayoutParams(0,-2,1));Button all=action("查看课表",JWXT_OAUTH);all.setTextSize(13);all.setBackground(bg(Color.argb(190,54,126,218),15));all.setOnClickListener(v->open("智慧教务",JWXT_OAUTH,false));sh.addView(all,new LinearLayout.LayoutParams(dp(94),dp(42)));schedule.addView(sh);
         String cachedSchedule=prefs.getString("schedule",todaySummary);if("个人课表".equals(cachedSchedule.trim())){cachedSchedule="今日无事";prefs.edit().putString("schedule",cachedSchedule).apply();}
-        ScrollView scheduleScroll=new ScrollView(this);scheduleWidgetScroll=scheduleScroll;scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        ScrollView scheduleScroll=new ScrollView(this);scheduleScroll.setFillViewport(false);scheduleScroll.setVerticalScrollBarEnabled(false);scheduleScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         final float[] scheduleTouchStartY={0f};
         scheduleScroll.setOnTouchListener((v,event)->{
             if(homeRefresh==null)return false;
@@ -677,62 +668,9 @@ public class MainActivity extends AppCompatActivity {
         if(count==0){TextView empty=t("当天没有安排课程",15,MUTED);empty.setGravity(Gravity.CENTER);empty.setPadding(0,dp(30),0,dp(30));scheduleTimeline.addView(empty);}
     }
     private void selectScheduleDay(int index){if(index<0||index>30)return;selectedScheduleIndex=index;renderScheduleDayStrip();updateScheduleDayDisplay();}
-    private String[] splitCourseEntries(String rawDay){
-        ArrayList<String> entries=new ArrayList<>();
-        if(rawDay==null||rawDay.trim().isEmpty())return new String[0];
-        String currentSlot="";
-        ArrayList<String> block=new ArrayList<>();
-        java.util.regex.Pattern slotPattern=java.util.regex.Pattern.compile("^(1-2|3-4|5-6|7-8|9-10|11-12|13-14)(?:\\t| {2,})(.*)$");
-        java.util.regex.Pattern weekPattern=java.util.regex.Pattern.compile("^\\d+(?:-\\d+)?(?:\\s*,\\s*\\d+(?:-\\d+)?)*(?:\\s*[（(](?:单|双)[）)])?\\s+[\\d,]+$");
-        for(String rawLine:rawDay.replace("\\r","").split("\\n")){
-            String line=rawLine.trim().replaceFirst("^[•·]\\s*","");
-            if(line.isEmpty())continue;
-            java.util.regex.Matcher slot=slotPattern.matcher(line);
-            if(slot.matches()){
-                if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,null);
-                currentSlot=slot.group(1);
-                block.clear();
-                if(!slot.group(2).trim().isEmpty())block.add(slot.group(2).trim());
-                continue;
-            }
-            if(weekPattern.matcher(line).matches()){
-                if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,line);
-                block.clear();
-            }else if(!line.equals("-")&&!line.equals("无")){
-                block.add(line);
-            }
-        }
-        if(!block.isEmpty())appendCourseEntry(entries,currentSlot,block,null);
-        return entries.toArray(new String[0]);
-    }
-    private void appendCourseEntry(ArrayList<String> entries,String slot,ArrayList<String> block,String weekLine){
-        if(block.isEmpty())return;
-        StringBuilder item=new StringBuilder();
-        if(slot!=null&&!slot.isEmpty())item.append(slot).append(" ");
-        for(String part:block){if(item.length()>0)item.append(" ");item.append(part.trim());}
-        if(weekLine!=null&&!weekLine.trim().isEmpty())item.append(" ").append(weekLine.trim());
-        entries.add(item.toString().trim());
-    }
-    private boolean courseOccursInWeek(String line,int weekNo){
-        if(weekNo<=0)return true;
-        java.util.regex.Matcher tail=java.util.regex.Pattern.compile("((?:\\d+(?:-\\d+)?(?:\\s*[（(](?:单|双)[）)])?\\s*,\\s*)*\\d+(?:-\\d+)?(?:\\s*[（(](?:单|双)[）)])?)\\s+[\\d,]+$").matcher(line.trim());
-        if(!tail.find())return true;
-        String[] ranges=tail.group(1).split("\\s*,\\s*");
-        for(String range:ranges){
-            java.util.regex.Matcher part=java.util.regex.Pattern.compile("^(\\d+)(?:-(\\d+))?\\s*[（(]?(单|双)?[）)]?$").matcher(range.trim());
-            if(!part.matches())continue;
-            try{
-                int first=Integer.parseInt(part.group(1));
-                int last=part.group(2)==null?first:Integer.parseInt(part.group(2));
-                String parity=part.group(3);
-                if(weekNo<first||weekNo>last)continue;
-                if("单".equals(parity)&&weekNo%2==0)continue;
-                if("双".equals(parity)&&weekNo%2!=0)continue;
-                return true;
-            }catch(Exception ignored){}
-        }
-        return false;
-    }
+    private String[] splitCourseEntries(String rawDay){return CourseScheduleParser.splitCourseEntries(rawDay);}
+    private void appendCourseEntry(ArrayList<String> entries,String slot,ArrayList<String> block,String weekLine){}
+    private boolean courseOccursInWeek(String line,int weekNo){return CourseScheduleParser.courseOccursInWeek(line,weekNo);}
     private int getSchoolWeek(Calendar today){
         String start=prefs.getString("semesterStart","");
         if(start.length()==0)return 0;
@@ -1009,18 +947,6 @@ public class MainActivity extends AppCompatActivity {
     private void open(String title,String url){open(title,url,true);}
     private void open(String title,String url,boolean returnHomeAfterLogin){ensureBrowser();browserTitle.setText(title);setContentView(browserView);browserView.setVisibility(View.VISIBLE);progress.setVisibility(View.VISIBLE);returnAfterLogin=returnHomeAfterLogin&&!setupInProgress&&url.contains("mobile.ecjtu.edu.cn/oauth/authorize")&&!url.equals(BILLSYS_OAUTH);webView.loadUrl(url);}
     private void showHome(){if(!prefs.getBoolean("setupComplete",false)){buildSetup();return;}buildHome();}
-    private void captureSchedule(WebView v,String url){
-        if(url==null||!url.contains("jwxt.ecjtu.edu.cn"))return;
-        if(url.contains("Schedule_getUserSchedume.action")){
-            v.evaluateJavascript("(function(){var e=document.getElementById('courseSche');return e?e.outerHTML:'';})()", value->{ if(value!=null&&value.length()>4) lastJwxtHtml=value; });
-        }
-    }
-    private void syncBillsysAndReturn(WebView v){
-        v.evaluateJavascript("(function(){return 'BILLCAP|'+(document.body?document.body.innerText:'').slice(0,12000);})()",raw->{
-            String x=jsClean(raw).replaceAll("\\s+"," ").trim();String val=extractNumber(x,new String[]{"剩余电费","剩余金额","账户余额","余额","overplus"});
-            if(val.length()>0){if(!val.startsWith("¥")&&!val.startsWith("￥"))val="¥"+val;saveValue("power",val);prefs.edit().putBoolean("billsysLogged",true).apply();Toast.makeText(this,"宿舍剩余电费已更新",Toast.LENGTH_SHORT).show();showHome();}
-        });
-    }
     private void syncFromPage(WebView v,String url){
         if(url==null)return;
         boolean jw=url.contains("jwxt.ecjtu.edu.cn"), bill=url.contains("billsys.ecjtu.edu.cn")||url.contains("atrustweb.ecjtu.edu.cn"), card=url.contains("ecard.ecjtu.edu.cn");
