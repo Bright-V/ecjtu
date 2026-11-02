@@ -32,7 +32,7 @@ final class WeatherLocationManager {
 
     static IpCity resolveIpCity(HttpGet http) throws Exception {
         JSONObject geo = new JSONObject(http.get(
-                "https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh"));
+                "https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh-CN"));
         if (!geo.optBoolean("success", false)) {
             throw new Exception(geo.optString("message", "IP 定位服务暂不可用"));
         }
