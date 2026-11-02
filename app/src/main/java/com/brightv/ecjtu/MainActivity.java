@@ -412,15 +412,34 @@ public class MainActivity extends AppCompatActivity {
                 @Override public void onProviderEnabled(String provider){}
                 @Override public void onStatusChanged(String provider,int status,android.os.Bundle extras){}
             };
+            boolean gpsEnabled=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            boolean networkEnabled=locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
             boolean requested=false;
-            if(locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)){locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);requested=true;}
-            if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)){locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0,weatherLocationListener);requested=true;}
+            if(gpsEnabled){
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0,weatherLocationListener);
+                requested=true;
+            }else if(networkEnabled){
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);
+                requested=true;
+            }
             if(!requested)throw new Exception("GPS 和网络定位均未开启");
+            if(gpsEnabled&&networkEnabled){
+                new android.os.Handler(getMainLooper()).postDelayed(()->{
+                    if(weatherLocationListener!=null){
+                        try{
+                            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);
+                            DiagnosticLogger.diagnostic(prefs,"天气","备用网络定位","开始","GPS 等待 6 秒仍无结果，启用 NETWORK_PROVIDER");
+                        }catch(Exception e){
+                            DiagnosticLogger.diagnostic(prefs,"天气","备用网络定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
+                        }
+                    }
+                },6000);
+            }
             new android.os.Handler(getMainLooper()).postDelayed(()->{
                 if(weatherLocationListener!=null){
                     try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
                     weatherLocationListener=null;
-                    DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","超时","切换到 IP 定位");
+                    DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","超时","GPS 与网络定位均无结果，切换到 IP 定位");
                     requestWeatherLocation();
                 }
             },12000);
