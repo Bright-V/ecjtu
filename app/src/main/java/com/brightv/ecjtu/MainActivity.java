@@ -411,7 +411,7 @@ public class MainActivity extends AppCompatActivity {
     private void requestWeatherLocation(){
         Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
         DiagnosticLogger.diagnostic(prefs,"天气","IP 定位回退","开始",
-                "GPS 定位未取得可用结果，准备调用 ipwho.is 免费 IP 地理位置接口");
+                "GPS 定位未取得可用结果，准备调用高德 Web 服务 IP 定位接口");
         new Thread(()->{try{
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","开始","准备请求 IP 地理位置接口");
             WeatherLocationManager.IpCity location=WeatherLocationManager.resolveIpCity(
@@ -422,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
         }catch(Exception e){
             String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",detail);
-            runOnUiThread(()->useDefaultBeijingWeather("IP 定位失败，已为你切换到北京天气。"));
+            runOnUiThread(()->Toast.makeText(this,"IP 定位失败："+e.getMessage(),Toast.LENGTH_LONG).show());
         }}).start();
     }
     private void useDefaultBeijingWeather(String message){
@@ -444,7 +444,7 @@ public class MainActivity extends AppCompatActivity {
             String id=station.id,display=station.displayName;
             prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
             runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));}}).start();
+        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->Toast.makeText(this,"IP 定位或气象站匹配失败："+e.getMessage(),Toast.LENGTH_LONG).show());}}).start();
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
@@ -820,7 +820,7 @@ public class MainActivity extends AppCompatActivity {
             String events=DiagnosticLogger.pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
             log.append("\n========== E. GPS 与 IP 定位诊断 ==========\n");
-            log.append("IP 定位 API: https://ipwho.is/（仅记录接口主机，不记录完整请求 URL）\n");
+            log.append("IP 定位 API: https://restapi.amap.com/v3/ip（高德 Web 服务 API；Key 不写入导出日志）\n");
             log.append("IP API HTTP 状态: ").append(prefs.getString("diag_ip_http","暂无请求记录")).append("\n");
             log.append("IP API 响应时间: ").append(prefs.getString("diag_ip_at","暂无")).append("\n");
             log.append("IP API 请求耗时: ").append(prefs.getString("diag_ip_duration_ms","暂无")).append("\n");
