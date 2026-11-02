@@ -31,20 +31,25 @@ final class WeatherLocationManager {
     }
 
     static IpCity resolveIpCity(HttpGet http) throws Exception {
-        JSONObject geo = new JSONObject(http.get(
-                "https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh-CN"));
-        if (!geo.optBoolean("success", false)) {
-            throw new Exception(geo.optString("message", "IP 定位服务暂不可用"));
+        String key = BuildConfig.AMAP_WEB_SERVICE_KEY;
+        if (key == null || key.trim().isEmpty()) {
+            throw new Exception("尚未配置高德 Web 服务 API Key。请在 Gradle 属性 AMAP_WEB_SERVICE_KEY 中填写。");
         }
-        String countryCode = geo.optString("country_code");
-        String province = geo.optString("region");
-        String city = geo.optString("city");
-        if (!"CN".equalsIgnoreCase(countryCode)) {
-            throw new Exception("当前 IP 定位到" + geo.optString("country", "境外地区")
-                    + " " + city + "，天气数据源暂不支持该地区");
+        String address = "https://restapi.amap.com/v3/ip?output=json&key="
+                + java.net.URLEncoder.encode(key.trim(), "UTF-8");
+        JSONObject geo = new JSONObject(http.get(address));
+        if (!"1".equals(geo.optString("status"))
+                || !"10000".equals(geo.optString("infocode"))) {
+            String info = geo.optString("info", "高德 IP 定位服务暂不可用");
+            String code = geo.optString("infocode", "");
+            throw new Exception("高德 IP 定位失败：" + info
+                    + (code.isEmpty() ? "" : "（错误码 " + code + "）"));
         }
-        if (province.isEmpty() || city.isEmpty()) {
-            throw new Exception("IP 定位未能识别到具体省份或城市");
+        String province = geo.optString("province").trim();
+        String city = geo.optString("city").trim();
+        if (province.isEmpty() || city.isEmpty()
+                || "局域网".equals(province) || "局域网".equals(city)) {
+            throw new Exception("高德 IP 定位未返回有效的国内省市。普通 IP 定位仅支持国内 IPv4；境外 IP 或 IPv6 可能无法识别。");
         }
         return new IpCity(province, city);
     }
