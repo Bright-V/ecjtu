@@ -422,7 +422,8 @@ public class MainActivity extends AppCompatActivity {
         }catch(Exception e){
             String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",detail);
-            runOnUiThread(()->Toast.makeText(this,"IP 定位失败："+e.getMessage(),Toast.LENGTH_LONG).show());
+            runOnUiThread(()->useDefaultBeijingWeather(
+                    "IP 定位失败，已为你切换到北京天气。原因："+String.valueOf(e.getMessage())));
         }}).start();
     }
     private void useDefaultBeijingWeather(String message){
@@ -444,7 +445,12 @@ public class MainActivity extends AppCompatActivity {
             String id=station.id,display=station.displayName;
             prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
             runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
-        }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->Toast.makeText(this,"IP 定位或气象站匹配失败："+e.getMessage(),Toast.LENGTH_LONG).show());}}).start();
+        }catch(Exception e){
+            String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",detail);
+            runOnUiThread(()->useDefaultBeijingWeather(
+                    "IP 定位成功但气象站匹配失败，已为你切换到北京天气。原因："+String.valueOf(e.getMessage())));
+        }}).start();
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
