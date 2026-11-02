@@ -451,12 +451,9 @@ public class MainActivity extends AppCompatActivity {
     private void requestWeatherLocation(){
         Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
         new Thread(()->{try{
-            JSONObject geo=new JSONObject(weatherHttpGet("https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh"));
-            if(!geo.optBoolean("success",false))throw new Exception(geo.optString("message","IP 定位服务暂不可用"));
-            String countryCode=geo.optString("country_code"),region=geo.optString("region"),city=geo.optString("city");
-            if(!"CN".equalsIgnoreCase(countryCode))throw new Exception("当前 IP 定位到"+geo.optString("country","境外地区")+" "+city+"，天气数据源暂不支持该地区");
-            if(region.isEmpty()||city.isEmpty())throw new Exception("IP 定位未能识别到具体省份或城市");
-            resolveCmaStationByName(region,city);
+            WeatherLocationManager.IpCity location=WeatherLocationManager.resolveIpCity(
+                    address->weatherHttpGet(address));
+            resolveCmaStationByName(location.province,location.city);
         }catch(Exception e){
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
             runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));
@@ -465,14 +462,9 @@ public class MainActivity extends AppCompatActivity {
     private void useDefaultBeijingWeather(String message){
         Toast.makeText(this,message,Toast.LENGTH_LONG).show();
         new Thread(()->{try{
-            JSONArray provinces=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province"));String code="";
-            for(int i=0;i<provinces.length();i++){JSONObject p=provinces.getJSONObject(i);if(p.optString("name").contains("北京")){code=p.optString("code");break;}}
-            if(code.isEmpty())throw new Exception("未找到北京气象站列表");
-            JSONArray stations=new JSONArray(weatherHttpGet("https://www.nmc.cn/rest/province/"+code));String id="";
-            for(int i=0;i<stations.length();i++){JSONObject s=stations.getJSONObject(i);if("北京".equals(s.optString("city"))){id=s.optString("code");break;}}
-            if(id.isEmpty()&&stations.length()>0)id=stations.getJSONObject(0).optString("code");
-            if(id.isEmpty())throw new Exception("未找到北京气象站编号");
-            final String stationId=id;
+            WeatherLocationManager.Station station=WeatherLocationManager.findDefaultBeijing(
+                    address->weatherHttpGet(address));
+            final String stationId=station.id;
             prefs.edit().putString("weather_station",stationId).putString("weather_city","北京").putBoolean("weather_ready",true).putBoolean("weather_default_beijing",true).apply();
             runOnUiThread(()->fetchCmaWeather(stationId));
         }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","北京默认站点","失败",e.getMessage());runOnUiThread(()->Toast.makeText(this,"北京天气也暂时无法获取，请检查网络",Toast.LENGTH_LONG).show());}}).start();
@@ -486,7 +478,7 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
         }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","IP 自动匹配气象站","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));}}).start();
     }
-        private void resolveCmaStation(Location location){
+    private void resolveCmaStation(Location location){
         new Thread(()->{try{
             Geocoder geocoder=new Geocoder(this,Locale.CHINA);List<Address> list=geocoder.getFromLocation(location.getLatitude(),location.getLongitude(),1);
             if(list==null||list.isEmpty())throw new Exception("GPS 坐标无法解析为行政区");
@@ -501,7 +493,7 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
         }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位与站点匹配","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->requestWeatherLocation());}}).start();
     }
-        private String weatherHttpGet(String address)throws Exception{
+    private String weatherHttpGet(String address)throws Exception{
         return WeatherManager.get(prefs,address);
     }
     private void fetchCmaWeather(String station){fetchCmaWeather(station,false);}
