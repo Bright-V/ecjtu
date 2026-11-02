@@ -57,7 +57,7 @@ import java.util.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final int BG=Color.rgb(9,18,34), CARD=Color.rgb(25,43,66), BLUE=Color.rgb(91,166,255), MUTED=Color.rgb(164,184,208);
-    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private ScrollView homeScrollView,scheduleScrollView; private boolean scheduleTouchInProgress=false; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private LocationManager locationManager; private LocationListener weatherLocationListener;
+    private LinearLayout homeView,browserView,widgetEditBar; private GridLayout widgetContainer; private WebView webView; private SwipeRefreshLayout homeRefresh; private ScrollView homeScrollView,scheduleScrollView; private boolean scheduleTouchInProgress=false; private int backgroundRefreshPending=0; private boolean backgroundRefreshing=false; private int backgroundRefreshFailures=0; private boolean setupInProgress=false; private TextView browserTitle; private ProgressBar progress; private TextView scheduleValue,scheduleDateLabel,powerValue,cardValue,spendValue,hitokotoValue,hitokotoFrom; private LinearLayout scheduleDayStrip,scheduleTimeline; private String[] scheduleDays=new String[31]; private int selectedScheduleIndex=15; private HorizontalScrollView scheduleDayScroll; private android.content.SharedPreferences prefs; private static final int REQ_RESTORE_SESSION=4102; private String pendingBackupPassword=null; private String lastJwxtRawData=""; private String lastJwxtParsedData=""; private String lastJwxtCaptureStatus="尚未抓取"; private String lastJwxtCaptureAt=""; private String todaySummary="尚未同步课表"; private boolean returnAfterLogin=false; private boolean widgetEditing=false; private boolean renderingDashboardWidgets=false; private TextView weatherWidgetCity,weatherWidgetInfo; private LinearLayout weatherPage; private JSONObject weatherData; private static final int REQ_WEATHER_LOCATION=7301; private WeatherLocationClient weatherLocationClient;
     private static final String JWXT_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=pqZ3wGM07i8R9mR3&response_type=code&scope=base_api&state=ecjtu&redirect_uri=https%3A%2F%2Fmobileapp.ecjtu.edu.cn%2Fcheck%2Fredirectapp%3Fredirect_url%3Dhttps%253A%252F%252Fjwxt.ecjtu.edu.cn%252FstuMag%252FLogin_dcpLogin.action";
     private static final String BILLSYS_OAUTH="https://mobile.ecjtu.edu.cn/oauth/authorize?client_id=8fa4065773ff0df4&redirect_uri=http%3A%2F%2Fbillsys.ecjtu.edu.cn%2Fstudent%2F%23%2Fpages%2Fbindinfo%2Fbindinfo&response_type=code&scope=base_api&state=zhjdapp";
     private final Set<String> allowed=new HashSet<>(Arrays.asList("portal.ecjtu.edu.cn","cas.ecjtu.edu.cn","mobile.ecjtu.edu.cn","mobileapp.ecjtu.edu.cn","jwxt.ecjtu.edu.cn","ecard.ecjtu.edu.cn","billsys.ecjtu.edu.cn","atrustweb.ecjtu.edu.cn","xymjxt.ecjtu.edu.cn","zhxg.ecjtu.edu.cn","zhxgapi.ecjtu.edu.cn"));
@@ -391,62 +391,20 @@ public class MainActivity extends AppCompatActivity {
             if(granted)requestGpsWeatherLocation();else requestWeatherLocation();
         }
     }
-    @SuppressLint("MissingPermission")
     private void requestGpsWeatherLocation(){
-        try{
-            locationManager=(LocationManager)getSystemService(LOCATION_SERVICE);
-            if(locationManager==null)throw new Exception("定位服务不可用");
-            Location last=null;
-            try{last=locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);}catch(Exception ignored){}
-            if(last==null)try{last=locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);}catch(Exception ignored){}
-            if(last!=null&&System.currentTimeMillis()-last.getTime()<10*60*1000L){resolveCmaStation(last);return;}
-            Toast.makeText(this,"正在获取 GPS 定位…",Toast.LENGTH_SHORT).show();
-            if(weatherLocationListener!=null)try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
-            weatherLocationListener=new LocationListener(){
-                @Override public void onLocationChanged(Location location){
-                    if(locationManager!=null&&weatherLocationListener!=null)try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
-                    weatherLocationListener=null;
-                    resolveCmaStation(location);
-                }
-                @Override public void onProviderDisabled(String provider){}
-                @Override public void onProviderEnabled(String provider){}
-                @Override public void onStatusChanged(String provider,int status,android.os.Bundle extras){}
-            };
-            boolean gpsEnabled=locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-            boolean networkEnabled=locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-            boolean requested=false;
-            if(gpsEnabled){
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0,weatherLocationListener);
-                requested=true;
-            }else if(networkEnabled){
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);
-                requested=true;
+        if(weatherLocationClient!=null)weatherLocationClient.cancel();
+        weatherLocationClient=new WeatherLocationClient(this,prefs,new WeatherLocationClient.Callback(){
+            @Override public void onSearching(){
+                Toast.makeText(MainActivity.this,"正在获取 GPS 定位…",Toast.LENGTH_SHORT).show();
             }
-            if(!requested)throw new Exception("GPS 和网络定位均未开启");
-            if(gpsEnabled&&networkEnabled){
-                new android.os.Handler(getMainLooper()).postDelayed(()->{
-                    if(weatherLocationListener!=null){
-                        try{
-                            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,0,0,weatherLocationListener);
-                            DiagnosticLogger.diagnostic(prefs,"天气","备用网络定位","开始","GPS 等待 6 秒仍无结果，启用 NETWORK_PROVIDER");
-                        }catch(Exception e){
-                            DiagnosticLogger.diagnostic(prefs,"天气","备用网络定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
-                        }
-                    }
-                },6000);
+            @Override public void onLocation(Location location){
+                resolveCmaStation(location);
             }
-            new android.os.Handler(getMainLooper()).postDelayed(()->{
-                if(weatherLocationListener!=null){
-                    try{locationManager.removeUpdates(weatherLocationListener);}catch(Exception ignored){}
-                    weatherLocationListener=null;
-                    DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","超时","GPS 与网络定位均无结果，切换到 IP 定位");
-                    requestWeatherLocation();
-                }
-            },12000);
-        }catch(Exception e){
-            DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
-            requestWeatherLocation();
-        }
+            @Override public void onFallback(){
+                requestWeatherLocation();
+            }
+        });
+        weatherLocationClient.start();
     }
     private void requestWeatherLocation(){
         Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
