@@ -411,13 +411,14 @@ public class MainActivity extends AppCompatActivity {
     private void requestWeatherLocation(){
         Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
         DiagnosticLogger.diagnostic(prefs,"天气","IP 定位回退","开始",
-                "GPS 定位未取得可用结果，准备调用高德 Web 服务 IP 定位接口");
+                "GPS 定位未取得可用结果，先通过 ipwho.is 获取公网 IPv4，再将该 IP 显式提交给高德 Web 服务 /v3/ip");
         new Thread(()->{try{
-            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","开始","准备请求 IP 地理位置接口");
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","开始",
+                    "定位链路：ipwho.is 获取公网 IPv4 → 高德 /v3/ip 查询省市");
             WeatherLocationManager.IpCity location=WeatherLocationManager.resolveIpCity(
                     address->weatherHttpGet(address));
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","解析成功",
-                    "省份="+location.province+"；城市="+location.city);
+                    "公网 IPv4="+location.publicIp+"；高德返回省份="+location.province+"；城市="+location.city);
             resolveCmaStationByName(location.province,location.city);
         }catch(Exception e){
             String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
