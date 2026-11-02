@@ -49,7 +49,7 @@ final class WeatherLocationManager {
         String publicIp = ipResult.optString("ip", "").trim();
         String countryCode = ipResult.optString("country_code", "").trim();
         if (!isPublicIpv4(publicIp)) {
-            throw new Exception("ipwho.is 返回的地址不是有效的公网 IPv4：" + publicIp);
+            throw new Exception("ipwho.is 返回的地址不是有效的公网 IPv4。");
         }
         if (!"CN".equalsIgnoreCase(countryCode)) {
             throw new Exception("当前公网 IP 的国家代码为 " + countryCode
@@ -121,7 +121,7 @@ final class WeatherLocationManager {
         return true;
     }
 
-    private static String maskIpv4(String ip) {
+    static String maskIpv4(String ip) {
         String[] parts = ip.split("\\.");
         return "***.***." + parts[2] + "." + parts[3];
     }
