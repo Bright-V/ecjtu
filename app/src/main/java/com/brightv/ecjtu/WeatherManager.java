@@ -75,7 +75,7 @@ final class WeatherManager {
                         status>=200&&status<300?"已收到响应":"HTTP 异常",
                         "HTTP 状态码="+status+"；响应长度="+raw.length()+"；耗时="+duration+"ms；响应正文已单独保存");
             } else if (ipWhoRequest) {
-                String safeRaw = raw.replaceAll("(?i)(\\"ip\\"\\s*:\\s*\\")[^\\"]*(\\")", "$1[IP 地址已隐藏]$2");
+                String safeRaw = raw.replaceAll("(?i)(\"ip\"\\s*:\\s*\")[^\"]*(\")", "$1[IP 地址已隐藏]$2");
                 String saved=DiagnosticLogger.diagnosticPayload(safeRaw,8000);
                 prefs.edit().putString("diag_ipwho_raw",saved.isEmpty()?"（接口未返回响应正文）":saved)
                         .putString("diag_ipwho_http",String.valueOf(status))
