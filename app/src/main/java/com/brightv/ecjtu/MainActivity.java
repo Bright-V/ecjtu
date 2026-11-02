@@ -438,14 +438,9 @@ public class MainActivity extends AppCompatActivity {
     }
     private void resolveCmaStation(Location location){
         new Thread(()->{try{
-            Geocoder geocoder=new Geocoder(this,Locale.CHINA);List<Address> list=geocoder.getFromLocation(location.getLatitude(),location.getLongitude(),1);
-            if(list==null||list.isEmpty())throw new Exception("GPS 坐标无法解析为行政区");
-            Address address=list.get(0);String province=address.getAdminArea(),city=address.getLocality();
-            if(city==null||city.isEmpty())city=address.getSubAdminArea();
-            String district=address.getSubLocality();
-            if(province==null||province.isEmpty()||city==null||city.isEmpty())throw new Exception("GPS 定位结果缺少省市信息");
-            WeatherLocationManager.Station station=WeatherLocationManager.findForAddress(province,city,district,
-                    endpoint->weatherHttpGet(endpoint));
+            WeatherGeocoder.AdministrativeArea area=WeatherGeocoder.resolve(this,location);
+            WeatherLocationManager.Station station=WeatherLocationManager.findForAddress(
+                    area.province,area.city,area.district,endpoint->weatherHttpGet(endpoint));
             String id=station.id,display=station.displayName;
             prefs.edit().putString("weather_station",id).putString("weather_city",display).putBoolean("weather_ready",true).putBoolean("weather_default_beijing",false).apply();
             runOnUiThread(()->{DiagnosticLogger.diagnostic(prefs,"天气","GPS 区县优先匹配","成功",display+"；站点编号="+id);if(weatherWidgetCity!=null)weatherWidgetCity.setText(display);fetchCmaWeather(id);});
