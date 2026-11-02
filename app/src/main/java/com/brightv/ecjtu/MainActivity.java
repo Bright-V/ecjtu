@@ -418,7 +418,7 @@ public class MainActivity extends AppCompatActivity {
             WeatherLocationManager.IpCity location=WeatherLocationManager.resolveIpCity(
                     address->weatherHttpGet(address));
             DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","解析成功",
-                    "公网 IPv4="+location.publicIp+"；高德返回省份="+location.province+"；城市="+location.city);
+                    "公网 IPv4="+WeatherLocationManager.maskIpv4(location.publicIp)+"；高德返回省份="+location.province+"；城市="+location.city);
             resolveCmaStationByName(location.province,location.city);
         }catch(Exception e){
             String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
@@ -827,12 +827,17 @@ public class MainActivity extends AppCompatActivity {
             String events=DiagnosticLogger.pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
             log.append("\n========== E. GPS 与 IP 定位诊断 ==========\n");
-            log.append("IP 定位 API: https://restapi.amap.com/v3/ip（高德 Web 服务 API；Key 不写入导出日志）\n");
-            log.append("IP API HTTP 状态: ").append(prefs.getString("diag_ip_http","暂无请求记录")).append("\n");
-            log.append("IP API 响应时间: ").append(prefs.getString("diag_ip_at","暂无")).append("\n");
-            log.append("IP API 请求耗时: ").append(prefs.getString("diag_ip_duration_ms","暂无")).append("\n");
-            log.append("IP API 响应正文（IP 地址字段已隐藏，最长保存 12000 字符）:\n");
-            log.append(prefs.getString("diag_ip_raw","暂无 IP 定位接口响应。请在天气页面重试定位后立即导出日志。")).append("\n");
+            log.append("公网 IP 获取 API: https://ipwho.is/（公网 IP 字段已隐藏）\\n");
+            log.append("公网 IP 获取 HTTP 状态: ").append(prefs.getString("diag_ipwho_http","暂无请求记录")).append("\\n");
+            log.append("公网 IP 获取时间: ").append(prefs.getString("diag_ipwho_at","暂无")).append("\\n");
+            log.append("公网 IP 获取耗时: ").append(prefs.getString("diag_ipwho_duration_ms","暂无")).append("\\n");
+            log.append("公网 IP 服务响应（IP 字段已隐藏）: ").append(prefs.getString("diag_ipwho_raw","暂无请求记录")).append("\\n");
+            log.append("高德 IP 定位 API: https://restapi.amap.com/v3/ip?ip=公网IPv4&output=json（Web 服务 API；Key 不写入导出日志）\\n");
+            log.append("高德 IP API HTTP 状态: ").append(prefs.getString("diag_ip_http","暂无请求记录")).append("\\n");
+            log.append("高德 IP API 响应时间: ").append(prefs.getString("diag_ip_at","暂无")).append("\\n");
+            log.append("高德 IP API 请求耗时: ").append(prefs.getString("diag_ip_duration_ms","暂无")).append("\\n");
+            log.append("高德 IP API 响应正文（IP 地址字段已隐藏，最长保存 12000 字符）:\\n");
+            log.append(prefs.getString("diag_ip_raw","暂无 IP 定位接口响应。请在天气页面重试定位后立即导出日志。")).append("\\n");
             log.append("GPS 定位、权限、Provider 状态、超时、IP 城市解析及气象站匹配过程，请查看 D 部分事件记录。事件保留最近 24 小时。\n");
             log.append("\n========== F. 中央气象台天气接口原始 JSON 响应 ==========\n");
             log.append("HTTP状态码: ").append(prefs.getString("diag_weather_http","暂无")).append("\n");
