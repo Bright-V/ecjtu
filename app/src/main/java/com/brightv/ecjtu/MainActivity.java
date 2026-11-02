@@ -408,13 +408,19 @@ public class MainActivity extends AppCompatActivity {
     }
     private void requestWeatherLocation(){
         Toast.makeText(this,"GPS 不可用，正在根据当前 IP 定位…",Toast.LENGTH_SHORT).show();
+        DiagnosticLogger.diagnostic(prefs,"天气","IP 定位回退","开始",
+                "GPS 定位未取得可用结果，准备调用 ipwho.is 免费 IP 地理位置接口");
         new Thread(()->{try{
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","开始","准备请求 IP 地理位置接口");
             WeatherLocationManager.IpCity location=WeatherLocationManager.resolveIpCity(
                     address->weatherHttpGet(address));
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","解析成功",
+                    "省份="+location.province+"；城市="+location.city);
             resolveCmaStationByName(location.province,location.city);
         }catch(Exception e){
-            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",e.getClass().getSimpleName()+": "+e.getMessage());
-            runOnUiThread(()->useDefaultBeijingWeather("获取定位失败，已为你切换到北京天气。"));
+            String detail=e.getClass().getSimpleName()+": "+String.valueOf(e.getMessage());
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 城市定位","失败",detail);
+            runOnUiThread(()->useDefaultBeijingWeather("IP 定位失败，已为你切换到北京天气。"));
         }}).start();
     }
     private void useDefaultBeijingWeather(String message){
@@ -429,6 +435,8 @@ public class MainActivity extends AppCompatActivity {
     }
     private void resolveCmaStationByName(String province,String city){
         new Thread(()->{try{
+            DiagnosticLogger.diagnostic(prefs,"天气","IP 气象站匹配","开始",
+                    "尝试匹配省份="+province+"；城市="+city);
             WeatherLocationManager.Station station=WeatherLocationManager.findByName(province,city,
                     address->weatherHttpGet(address));
             String id=station.id,display=station.displayName;
@@ -806,18 +814,26 @@ public class MainActivity extends AppCompatActivity {
             String packed=prefs.getString("scheduleDays","");
             if(packed.isEmpty())log.append("暂无缓存。\n");
             else{String[] cached=packed.split(String.valueOf((char)30),-1);for(int i=0;i<cached.length;i++){Calendar d=(Calendar)Calendar.getInstance().clone();d.add(Calendar.DAY_OF_MONTH,i-15);log.append(new SimpleDateFormat("yyyy-MM-dd EEE",Locale.CHINA).format(d.getTime())).append(": ").append(cached[i].replace("\n"," | ")).append("\n");}}
-            log.append("\n========== D. 全应用操作事件（最近15分钟） ==========\n");
+            log.append("\n========== D. 全应用操作事件（最近24小时） ==========\n");
             String events=DiagnosticLogger.pruneDiagnosticEvents(prefs.getString("diag_events",""),System.currentTimeMillis());
             log.append(events.isEmpty()?"暂无事件记录。\n":events);
-            log.append("\n========== E. 中央气象台天气接口原始 JSON 响应 ==========\n");
+            log.append("\n========== E. GPS 与 IP 定位诊断 ==========\n");
+            log.append("IP 定位 API: https://ipwho.is/（仅记录接口主机，不记录完整请求 URL）\n");
+            log.append("IP API HTTP 状态: ").append(prefs.getString("diag_ip_http","暂无请求记录")).append("\n");
+            log.append("IP API 响应时间: ").append(prefs.getString("diag_ip_at","暂无")).append("\n");
+            log.append("IP API 请求耗时: ").append(prefs.getString("diag_ip_duration_ms","暂无")).append("\n");
+            log.append("IP API 响应正文（IP 地址字段已隐藏，最长保存 12000 字符）:\n");
+            log.append(prefs.getString("diag_ip_raw","暂无 IP 定位接口响应。请在天气页面重试定位后立即导出日志。")).append("\n");
+            log.append("GPS 定位、权限、Provider 状态、超时、IP 城市解析及气象站匹配过程，请查看 D 部分事件记录。事件保留最近 24 小时。\n");
+            log.append("\n========== F. 中央气象台天气接口原始 JSON 响应 ==========\n");
             log.append("HTTP状态码: ").append(prefs.getString("diag_weather_http","暂无")).append("\n");
             log.append("响应时间: ").append(prefs.getString("diag_weather_at","暂无")).append("\n");
             log.append("原始响应正文（保留温度、体感温度及预报字段数值）:\n");
             log.append(prefs.getString("diag_weather_raw","暂无天气接口原始响应。请打开天气页面并成功刷新后重新导出。")).append("\n");
-            log.append("\n========== F. 其他服务最近原始响应摘要 ==========\n");
+            log.append("\n========== G. 其他服务最近原始响应摘要 ==========\n");
             for(String key:new String[]{"diag_power_raw","diag_card_raw","diag_hitokoto_raw","diag_auth_status","diag_power_result","diag_card_result"}) log.append(key).append(": ").append(prefs.getString(key,"暂无")).append("\n");
-            log.append("\n========== G. 诊断说明 ==========\n");
-            log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存；E 部分记录中央气象台接口返回的天气 JSON 原文（最长保存 30000 个字符）。\n");
+            log.append("\n========== H. 诊断说明 ==========\n");
+            log.append("A 部分记录网页课表表格中每个星期、每个节次单元格的文本；B 部分记录应用拆分后的课程条目；C 部分记录周次筛选后的本地缓存；D 部分记录最近 24 小时的应用事件；E 部分记录 GPS 与 IP 定位链路及 IP API 响应；F 部分记录中央气象台接口返回的天气 JSON 原文（最长保存 30000 个字符）。\n");
             log.append("未导出网页 HTML、Cookie、Token、账号密码、请求头或完整请求 URL。天气 JSON 会保留用于分析的温度数值，但可能包含站点和天气观测信息；原始课程文本可能包含课程名、教师姓名和教室信息，分享日志前请自行检查。\n");
             if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q){
                 ContentValues values=new ContentValues();
