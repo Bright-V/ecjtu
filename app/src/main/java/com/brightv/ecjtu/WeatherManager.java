@@ -55,7 +55,7 @@ final class WeatherManager {
             String raw=out.toString();
             long duration = System.currentTimeMillis() - startedAt;
             if (ipLocationRequest) {
-                String safeRaw = raw.replaceAll("(?i)(\\"ip\\"\\s*:\\s*\\")[^\\"]*(\\")", "$1[IP 地址已隐藏]$2");
+                String safeRaw = raw.replaceAll("(?i)(\"ip\"\\s*:\\s*\")[^\"]*(\")", "$1[IP 地址已隐藏]$2");
                 String saved=DiagnosticLogger.diagnosticPayload(safeRaw,12000);
                 prefs.edit().putString("diag_ip_raw",saved.isEmpty()?"（接口未返回响应正文）":saved)
                         .putString("diag_ip_http",String.valueOf(status))
