@@ -1,6 +1,16 @@
 plugins { id("com.android.application") }
 
+val amapWebServiceKey = providers.gradleProperty("AMAP_WEB_SERVICE_KEY")
+    .orElse(providers.environmentVariable("AMAP_WEB_SERVICE_KEY"))
+    .getOrElse("")
+val escapedAmapWebServiceKey = amapWebServiceKey
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
+    buildFeatures {
+        buildConfig = true
+    }
     namespace = "cn.edu.ecjtu"
     compileSdk = 36
     defaultConfig {
@@ -9,6 +19,7 @@ android {
         targetSdk = 36
         versionCode = 2
         versionName = "0.2.0"
+        buildConfigField("String", "AMAP_WEB_SERVICE_KEY", "\"$escapedAmapWebServiceKey\"")
     }
     signingConfigs {
         create("fixed") {
