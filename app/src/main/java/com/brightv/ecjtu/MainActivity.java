@@ -486,20 +486,11 @@ public class MainActivity extends AppCompatActivity {
             if(pressure!=null) {details.addView(t("气压  "+pressure+" hPa",14,MUTED));hasDetail=true;}
             if(rain!=null) {details.addView(t("降水量  "+rain+" mm",14,MUTED));hasDetail=true;}
             if(hasDetail){body.addView(details);addSpace(body,14);}
-            JSONObject predict=weatherData.optJSONObject("predict");JSONArray days=predict==null?null:predict.optJSONArray("detail");LinearLayout forecast=card();forecast.addView(title("未来天气",18));int forecastCount=0;
-            if(days!=null)for(int i=0;i<days.length();i++){
-                JSONObject day=days.optJSONObject(i);if(day==null)continue;
-                JSONObject daytime=day.optJSONObject("day"),night=day.optJSONObject("night");
-                JSONObject dw=daytime==null?null:daytime.optJSONObject("weather"),nw=night==null?null:night.optJSONObject("weather");
-                String dayTemp=validWeatherNumber(dw,"temperature",-90,60),nightTemp=validWeatherNumber(nw,"temperature",-90,60);
-                String dayInfo=validWeatherText(dw,"info"),nightInfo=validWeatherText(nw,"info");
-                ArrayList<Double> temps=new ArrayList<>();if(dayTemp!=null)temps.add(Double.parseDouble(dayTemp));if(nightTemp!=null)temps.add(Double.parseDouble(nightTemp));
-                String forecastInfo=dayInfo!=null?dayInfo:nightInfo;if(forecastInfo==null||temps.isEmpty())continue;
-                Collections.sort(temps);double low=temps.get(0),high=temps.get(temps.size()-1);
-                String range=low==(long)low?String.valueOf((long)low):String.valueOf(low);
-                if(high!=low)range+="/"+(high==(long)high?String.valueOf((long)high):String.valueOf(high));
-                String date=validWeatherText(day,"date");if(date==null)date="";
-                forecast.addView(t(date+"   "+forecastInfo+"  "+range+"°",13,MUTED));forecastCount++;
+            LinearLayout forecast=card();forecast.addView(title("未来天气",18));
+            List<WeatherForecastParser.ForecastDay> forecastDays=WeatherForecastParser.parse(weatherData);
+            int forecastCount=0;
+            for(WeatherForecastParser.ForecastDay forecastDay:forecastDays){
+                forecast.addView(t(forecastDay.toDisplayText(),13,MUTED));forecastCount++;
             }
             if(forecastCount>0){body.addView(forecast);addSpace(body,14);}
             JSONObject warn=real==null?null:real.optJSONObject("warn");String warning=validWeatherText(warn,"issuecontent");
