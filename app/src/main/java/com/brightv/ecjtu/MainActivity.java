@@ -388,6 +388,8 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
         if(requestCode==REQ_WEATHER_LOCATION){
             boolean granted=false;for(int result:grantResults)if(result==PackageManager.PERMISSION_GRANTED)granted=true;
+            DiagnosticLogger.diagnostic(prefs,"天气","位置权限结果",granted?"已授权":"未授权",
+                    "权限回调数量="+grantResults.length+"；将"+(granted?"尝试设备定位":"直接使用 IP 定位"));
             if(granted)requestGpsWeatherLocation();else requestWeatherLocation();
         }
     }
