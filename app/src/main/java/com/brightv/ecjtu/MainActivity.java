@@ -368,7 +368,7 @@ public class MainActivity extends AppCompatActivity {
         TextView title=title("天气",19);title.setGravity(Gravity.CENTER);bar.addView(title,new LinearLayout.LayoutParams(0,dp(52),1));
         Button refresh=navButton("刷新",false);refresh.setOnClickListener(v->refreshWeatherLocation());bar.addView(refresh);weatherPage.addView(bar);
         ScrollView scroll=new ScrollView(this);LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(18),dp(8),dp(18),dp(28));scroll.addView(body);weatherPage.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));applySystemBarInsets(weatherPage);setContentView(weatherPage);
-        if(weatherData==null){String cache=prefs.getString("weather_cache","");if(!cache.isEmpty())try{weatherData=new JSONObject(cache);}catch(Exception ignored){}}
+        if(weatherData==null)weatherData=WeatherCacheManager.load(prefs);
         renderWeatherPage();
     }
     private void refreshWeatherLocation(){
@@ -458,7 +458,7 @@ public class MainActivity extends AppCompatActivity {
                     prefs.getString("weather_city",""));
             JSONObject data=parsed.data;
             String city=parsed.city,description=parsed.description,temperature=parsed.temperature,brief=parsed.brief;
-            weatherData=data;refreshOk=true;prefs.edit().putString("weather_city",city).putString("weather_brief",brief).putString("weather_cache",data.toString()).putLong("weather_updated_ms",System.currentTimeMillis()).apply();
+            weatherData=data;refreshOk=true;WeatherCacheManager.save(prefs,data,city,brief);
             DiagnosticLogger.diagnostic(prefs,"天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
             runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
         }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","中央气象台数据更新","失败",e.getClass().getSimpleName()+": "+e.getMessage());runOnUiThread(()->{if(weatherData==null)Toast.makeText(this,"天气获取失败："+e.getMessage(),Toast.LENGTH_LONG).show();else Toast.makeText(this,"天气更新失败，正在显示缓存数据",Toast.LENGTH_SHORT).show();});}finally{if(countAsHomeRefresh){boolean ok=refreshOk;runOnUiThread(()->finishBackgroundRefresh(ok));}}}).start();
