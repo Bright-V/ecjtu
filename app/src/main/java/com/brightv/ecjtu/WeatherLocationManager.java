@@ -1,7 +1,5 @@
 package cn.edu.ecjtu;
 
-import android.location.Address;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -22,6 +20,64 @@ final class WeatherLocationManager {
     }
 
     private WeatherLocationManager() {}
+    static final class IpCity {
+        final String province;
+        final String city;
+
+        IpCity(String province, String city) {
+            this.province = province;
+            this.city = city;
+        }
+    }
+
+    static IpCity resolveIpCity(HttpGet http) throws Exception {
+        JSONObject geo = new JSONObject(http.get(
+                "https://ipwho.is/?fields=success,country,country_code,region,city&lang=zh"));
+        if (!geo.optBoolean("success", false)) {
+            throw new Exception(geo.optString("message", "IP 定位服务暂不可用"));
+        }
+        String countryCode = geo.optString("country_code");
+        String province = geo.optString("region");
+        String city = geo.optString("city");
+        if (!"CN".equalsIgnoreCase(countryCode)) {
+            throw new Exception("当前 IP 定位到" + geo.optString("country", "境外地区")
+                    + " " + city + "，天气数据源暂不支持该地区");
+        }
+        if (province.isEmpty() || city.isEmpty()) {
+            throw new Exception("IP 定位未能识别到具体省份或城市");
+        }
+        return new IpCity(province, city);
+    }
+
+    static Station findDefaultBeijing(HttpGet http) throws Exception {
+        JSONArray provinces = new JSONArray(http.get("https://www.nmc.cn/rest/province"));
+        String provinceCode = "";
+        for (int i = 0; i < provinces.length(); i++) {
+            JSONObject item = provinces.getJSONObject(i);
+            if (item.optString("name").contains("北京")) {
+                provinceCode = item.optString("code");
+                break;
+            }
+        }
+        if (provinceCode.isEmpty()) throw new Exception("未找到北京气象站列表");
+
+        JSONArray stations = new JSONArray(http.get(
+                "https://www.nmc.cn/rest/province/" + provinceCode));
+        String stationId = "";
+        for (int i = 0; i < stations.length(); i++) {
+            JSONObject item = stations.getJSONObject(i);
+            if ("北京".equals(item.optString("city"))) {
+                stationId = item.optString("code");
+                break;
+            }
+        }
+        if (stationId.isEmpty() && stations.length() > 0) {
+            stationId = stations.getJSONObject(0).optString("code");
+        }
+        if (stationId.isEmpty()) throw new Exception("未找到北京气象站编号");
+        return new Station(stationId, "北京");
+    }
+
 
     static Station findByName(String province, String city, HttpGet http) throws Exception {
         JSONArray provinces = new JSONArray(http.get("https://www.nmc.cn/rest/province"));
