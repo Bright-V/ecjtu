@@ -49,15 +49,24 @@ public final class WeatherLocationClient {
             Location last = null;
             try {
                 last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            } catch (Exception ignored) {
+                DiagnosticLogger.diagnostic(prefs,"天气","GPS 缓存定位","检查完成",
+                        last == null ? "GPS_PROVIDER 没有缓存位置" : "GPS_PROVIDER 缓存位置可用");
+            } catch (Exception e) {
+                DiagnosticLogger.diagnostic(prefs,"天气","GPS 缓存定位","读取失败",
+                        e.getClass().getSimpleName()+": "+e.getMessage());
             }
             if (last == null) {
                 try {
                     last = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    DiagnosticLogger.diagnostic(prefs,"天气","网络缓存定位","读取失败",
+                            e.getClass().getSimpleName()+": "+e.getMessage());
                 }
             }
             if (last != null && System.currentTimeMillis() - last.getTime() < 10 * 60 * 1000L) {
+                DiagnosticLogger.diagnostic(prefs,"天气","缓存定位","成功",
+                        "使用最近一次设备缓存位置；provider="+last.getProvider()
+                                +"；位置年龄="+(System.currentTimeMillis()-last.getTime())+"ms");
                 completeWithLocation(last);
                 return;
             }
@@ -66,11 +75,18 @@ public final class WeatherLocationClient {
             listener = new LocationListener() {
                 @Override
                 public void onLocationChanged(Location location) {
+                    if (location != null) {
+                        DiagnosticLogger.diagnostic(prefs,"天气","设备定位回调","收到位置",
+                                "provider="+location.getProvider()+"；accuracy="
+                                        +location.getAccuracy()+"m；位置年龄="
+                                        +(System.currentTimeMillis()-location.getTime())+"ms");
+                    }
                     completeWithLocation(location);
                 }
 
                 @Override
                 public void onProviderDisabled(String provider) {
+                    DiagnosticLogger.diagnostic(prefs,"天气","定位服务状态","provider 已关闭",provider);
                 }
 
                 @Override
@@ -84,14 +100,18 @@ public final class WeatherLocationClient {
 
             boolean gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
             boolean networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+            DiagnosticLogger.diagnostic(prefs,"天气","定位服务状态","检查完成",
+                    "GPS_PROVIDER="+gpsEnabled+"；NETWORK_PROVIDER="+networkEnabled);
             boolean requested = false;
 
             if (gpsEnabled) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, listener);
                 requested = true;
+                DiagnosticLogger.diagnostic(prefs,"天气","GPS 定位","开始监听","已注册 GPS_PROVIDER");
             } else if (networkEnabled) {
                 locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, listener);
                 requested = true;
+                DiagnosticLogger.diagnostic(prefs,"天气","网络定位","开始监听","GPS 未开启，直接注册 NETWORK_PROVIDER");
             }
 
             if (!requested) throw new Exception("GPS 和网络定位均未开启");
