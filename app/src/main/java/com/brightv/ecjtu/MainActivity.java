@@ -453,10 +453,11 @@ public class MainActivity extends AppCompatActivity {
     private void fetchCmaWeather(String station,boolean countAsHomeRefresh){
         if(station==null||station.isEmpty()){if(countAsHomeRefresh)finishBackgroundRefresh(false);return;}
         new Thread(()->{boolean refreshOk=false;try{
-            JSONObject root=new JSONObject(weatherHttpGet("https://www.nmc.cn/rest/weather?stationid="+Uri.encode(station)));JSONObject data=root.optJSONObject("data");if(data==null)throw new Exception("中央气象台未返回天气数据");
-            JSONObject real=data.optJSONObject("real");JSONObject weather=real==null?null:real.optJSONObject("weather");if(weather==null)throw new Exception("实时天气数据暂缺");
-            String city=real.optJSONObject("station")==null?prefs.getString("weather_city",""):real.optJSONObject("station").optString("city",prefs.getString("weather_city",""));
-            String description=weather.optString("info","").trim(),temperature=weather.optString("temperature","--");temperature=temperature.replace("℃","").replace("°","").trim();try{double n=Double.parseDouble(temperature);if(!Double.isFinite(n)||n<=-90||n>=70)temperature="--";else temperature=String.valueOf((int)Math.round(n));}catch(Exception bad){temperature="--";}boolean validDescription=!description.isEmpty()&&!description.equals("-")&&!description.equals("--");String brief=(validDescription?description+"  ":"")+temperature+(temperature.equals("--")?"":"°");
+            WeatherDataParser.ParsedWeather parsed=WeatherDataParser.parse(
+                    weatherHttpGet("https://www.nmc.cn/rest/weather?stationid="+Uri.encode(station)),
+                    prefs.getString("weather_city",""));
+            JSONObject data=parsed.data;
+            String city=parsed.city,description=parsed.description,temperature=parsed.temperature,brief=parsed.brief;
             weatherData=data;refreshOk=true;prefs.edit().putString("weather_city",city).putString("weather_brief",brief).putString("weather_cache",data.toString()).putLong("weather_updated_ms",System.currentTimeMillis()).apply();
             DiagnosticLogger.diagnostic(prefs,"天气","中央气象台数据更新","成功","城市="+city+"；天气="+description+"；气温="+temperature);
             runOnUiThread(()->{if(weatherWidgetCity!=null)weatherWidgetCity.setText(city);if(weatherWidgetInfo!=null)weatherWidgetInfo.setText(brief);if(weatherPage!=null&&weatherPage.getVisibility()==View.VISIBLE)renderWeatherPage();});
