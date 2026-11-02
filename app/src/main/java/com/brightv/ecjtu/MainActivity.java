@@ -469,22 +469,21 @@ public class MainActivity extends AppCompatActivity {
         if(weatherPage==null)return;ScrollView scroll=(ScrollView)weatherPage.getChildAt(1);LinearLayout body=(LinearLayout)scroll.getChildAt(0);body.removeAllViews();
         if(weatherData==null){TextView wait=title("正在连接中央气象台…",20);wait.setPadding(0,dp(45),0,dp(45));body.addView(wait);body.addView(t("首次使用需要定位并匹配附近气象站。",14,MUTED));return;}
         try{
-            JSONObject real=weatherData.optJSONObject("real");JSONObject now=real==null?null:real.optJSONObject("weather");if(now==null)now=new JSONObject();JSONObject wind=real==null?null:real.optJSONObject("wind");if(wind==null)wind=new JSONObject();
-            String temperature=validWeatherNumber(now,"temperature",-90,60),description=validWeatherText(now,"info"),feelsLike=validWeatherNumber(now,"feelst",-100,70),humidity=validWeatherNumber(now,"humidity",0,100);
+            WeatherCurrentParser.CurrentWeather current=WeatherCurrentParser.parse(weatherData);
+            String temperature=current.temperature,description=current.description,feelsLike=current.feelsLike,humidity=current.humidity;
             LinearLayout hero=card();hero.setBackground(glass(28));hero.addView(t(prefs.getString("weather_city","当地天气")+" · 实时天气",15,MUTED));
             if(temperature!=null)hero.addView(title(temperature+"°",62));
             if(description!=null)hero.addView(title(description,23));
             if(feelsLike!=null)hero.addView(t("体感温度  "+feelsLike+"°",14,MUTED));
             if(humidity!=null)hero.addView(t("相对湿度  "+humidity+"%",14,MUTED));
-            String publishTime=real==null?null:validWeatherText(real,"publish_time");if(publishTime!=null)hero.addView(t("观测时间  "+publishTime,12,MUTED));
+            if(current.publishTime!=null)hero.addView(t("观测时间  "+current.publishTime,12,MUTED));
             body.addView(hero);addSpace(body,14);
             LinearLayout details=card();details.addView(title("天气详情",18));boolean hasDetail=false;
-            String direction=validWeatherText(wind,"direct"),power=validWeatherText(wind,"power"),speed=validWeatherNumber(wind,"speed",0,100),pressure=validWeatherNumber(now,"airpressure",800,1100),rain=validWeatherNumber(now,"rain",0,1000);
-            if(direction!=null) {details.addView(t("风向  "+direction,14,MUTED));hasDetail=true;}
-            if(power!=null) {details.addView(t("风力  "+power,14,MUTED));hasDetail=true;}
-            if(speed!=null) {details.addView(t("风速  "+speed+" m/s",14,MUTED));hasDetail=true;}
-            if(pressure!=null) {details.addView(t("气压  "+pressure+" hPa",14,MUTED));hasDetail=true;}
-            if(rain!=null) {details.addView(t("降水量  "+rain+" mm",14,MUTED));hasDetail=true;}
+            if(current.windDirection!=null) {details.addView(t("风向  "+current.windDirection,14,MUTED));hasDetail=true;}
+            if(current.windPower!=null) {details.addView(t("风力  "+current.windPower,14,MUTED));hasDetail=true;}
+            if(current.windSpeed!=null) {details.addView(t("风速  "+current.windSpeed+" m/s",14,MUTED));hasDetail=true;}
+            if(current.pressure!=null) {details.addView(t("气压  "+current.pressure+" hPa",14,MUTED));hasDetail=true;}
+            if(current.rainfall!=null) {details.addView(t("降水量  "+current.rainfall+" mm",14,MUTED));hasDetail=true;}
             if(hasDetail){body.addView(details);addSpace(body,14);}
             LinearLayout forecast=card();forecast.addView(title("未来天气",18));
             List<WeatherForecastParser.ForecastDay> forecastDays=WeatherForecastParser.parse(weatherData);
@@ -493,7 +492,7 @@ public class MainActivity extends AppCompatActivity {
                 forecast.addView(t(forecastDay.toDisplayText(),13,MUTED));forecastCount++;
             }
             if(forecastCount>0){body.addView(forecast);addSpace(body,14);}
-            JSONObject warn=real==null?null:real.optJSONObject("warn");String warning=validWeatherText(warn,"issuecontent");
+            String warning=current.warning;
             if(warning!=null){LinearLayout alert=card();alert.addView(title("气象预警",18));alert.addView(t(warning,14,MUTED));body.addView(alert);addSpace(body,12);}
             body.addView(t("数据来源：中央气象台（国家气象中心）",12,MUTED));
         }catch(Exception e){DiagnosticLogger.diagnostic(prefs,"天气","详情渲染","失败",e.getClass().getSimpleName()+": "+e.getMessage());body.addView(t("天气详情暂时无法显示",14,MUTED));}
