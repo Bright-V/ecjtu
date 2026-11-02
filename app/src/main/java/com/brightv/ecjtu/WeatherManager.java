@@ -18,8 +18,9 @@ final class WeatherManager {
 
     static String get(SharedPreferences prefs,String address)throws Exception {
         URL url = new URL(address);
-        boolean ipLocationRequest = "ipwho.is".equalsIgnoreCase(url.getHost());
-        String service = ipLocationRequest ? "IP 定位服务" : "中央气象台";
+        boolean ipLocationRequest = "restapi.amap.com".equalsIgnoreCase(url.getHost())
+                && "/v3/ip".equals(url.getPath());
+        String service = ipLocationRequest ? "高德 IP 定位服务" : "中央气象台";
         long startedAt = System.currentTimeMillis();
         HttpURLConnection connection=(HttpURLConnection)url.openConnection();
         connection.setRequestMethod("GET");
@@ -34,7 +35,7 @@ final class WeatherManager {
                     .putString("diag_ip_at",formatTime())
                     .putString("diag_ip_duration_ms","进行中").apply();
             DiagnosticLogger.diagnostic(prefs,"天气","IP 定位 API 请求","开始",
-                    "正在请求 ipwho.is；连接超时 10 秒，读取超时 12 秒");
+                    "正在请求高德 IP 定位接口；连接超时 10 秒，读取超时 12 秒");
         } else {
             prefs.edit().remove("diag_weather_raw")
                     .putString("diag_weather_http","请求中")
