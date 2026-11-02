@@ -7,7 +7,7 @@ import java.util.Locale;
 
 /** Local, redacted diagnostic event storage and formatting. */
 final class DiagnosticLogger {
-    private static final long DIAGNOSTIC_RETENTION_MS=15L*60L*1000L;
+    private static final long DIAGNOSTIC_RETENTION_MS=24L*60L*60L*1000L;
     private DiagnosticLogger() {}
 
     static String pruneDiagnosticEvents(String raw,long now){
